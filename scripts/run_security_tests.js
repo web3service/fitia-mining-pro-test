@@ -2593,21 +2593,26 @@ function httpRequest(port, method, reqPath) {
       assert.ok(htmlStr.includes('id="projet"'), 'La page publique présente le projet');
       assert.ok(htmlStr.includes('<html lang="en">'), 'La page publique est déclarée en anglais');
       assert.ok(htmlStr.includes('Explore the project'), 'Le contenu de présentation est traduit en anglais');
-      assert.ok(htmlStr.includes('Official release available.'), 'La disponibilité du téléchargement est visible en anglais');
+      assert.ok(htmlStr.includes('Test APK not available.'), 'La page indique que l’APK de test n’est pas publié');
       assert.ok(!htmlStr.includes('Update in progress'), 'L’ancien message de maintenance est retiré');
       assert.ok(!htmlStr.includes('Mise à jour en cours'), 'Ancien libellé français de maintenance supprimé');
-      assert.strictEqual(htmlStr.split('href="FITIA-PRO-TEST.apk"').length - 1, 2, 'Les deux boutons publics téléchargent directement l’APK');
-      assert.ok(!htmlStr.includes('button-disabled'), 'Aucun bouton de téléchargement désactivé');
+      assert.strictEqual(htmlStr.split('href="FITIA-PRO-TEST.apk"').length - 1, 0, 'Aucun lien de téléchargement avant publication');
+      assert.strictEqual(htmlStr.split('type="button" disabled').length - 1, 2, 'Les deux boutons de téléchargement sont désactivés');
       assert.ok(!htmlStr.includes('id="auth-screen"'), 'Le wallet n’est plus exposé sur la page publique');
 
       const apkHead = await httpRequest(8080, 'HEAD', '/FITIA-PRO-TEST.apk');
-      assert.strictEqual(apkHead.statusCode, 200);
-      assert.strictEqual(apkHead.headers['content-type'], 'application/vnd.android.package-archive');
-      assert.strictEqual(Number(apkHead.headers['content-length']), fs.statSync(path.join(ROOT, 'FITIA-PRO-TEST.apk')).size);
-      const apkGet = await httpRequest(8080, 'GET', '/FITIA-PRO-TEST.apk');
-      assert.strictEqual(apkGet.statusCode, 200);
-      assert.ok(apkGet.body.equals(fs.readFileSync(path.join(ROOT, 'FITIA-PRO-TEST.apk'))), 'Le serveur public fournit exactement l’APK signé');
-      assert.ok(apkGet.headers['content-disposition'].includes('attachment'));
+      const apkPath = path.join(ROOT, 'FITIA-PRO-TEST.apk');
+      if (fs.existsSync(apkPath)) {
+        assert.strictEqual(apkHead.statusCode, 200);
+        assert.strictEqual(apkHead.headers['content-type'], 'application/vnd.android.package-archive');
+        assert.strictEqual(Number(apkHead.headers['content-length']), fs.statSync(apkPath).size);
+        const apkGet = await httpRequest(8080, 'GET', '/FITIA-PRO-TEST.apk');
+        assert.strictEqual(apkGet.statusCode, 200);
+        assert.ok(apkGet.body.equals(fs.readFileSync(apkPath)), 'Le serveur fournit exactement l’APK signé');
+        assert.ok(apkGet.headers['content-disposition'].includes('attachment'));
+      } else {
+        assert.strictEqual(apkHead.statusCode, 404, 'Aucun APK officiel n’est proposé comme build de test');
+      }
       const vercelConfig = JSON.parse(fs.readFileSync(path.join(ROOT, 'vercel.json'), 'utf8'));
       assert.ok(!(vercelConfig.redirects || []).some((rule) => rule.source === '/FITIA-PRO-TEST.apk'), 'Vercel ne redirige plus le téléchargement vers la maintenance');
 
