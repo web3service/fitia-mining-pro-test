@@ -1,0 +1,1 @@
+# fitia-mining-pro-test
