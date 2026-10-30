@@ -1,0 +1,8 @@
+{
+  "enabled": false,
+  "versionCode": 311,
+  "versionName": "3.3.5",
+  "apkUrl": "",
+  "sha256": "",
+  "notes": "Mises à jour dans l’application, vérification SHA-256 et certificat de signature stable."
+}

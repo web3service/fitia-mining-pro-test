@@ -1,0 +1,48 @@
+{
+  "enabled": true,
+  "hiddenShopItems": {
+    "machine": [
+      0,
+      1,
+      6,
+      7
+    ],
+    "battery": [
+      0,
+      1,
+      2
+    ]
+  },
+  "promotions": [
+    {
+      "id": "badge-mvolv38x-2ba615c5",
+      "targetType": "machine",
+      "targetId": 0,
+      "variant": "badge",
+      "animated": true,
+      "label": {
+        "fr": "Promo"
+      }
+    },
+    {
+      "id": "badge-mvom0ihr-e1b187b7",
+      "targetType": "machine",
+      "targetId": 1,
+      "variant": "badge",
+      "animated": true,
+      "label": {
+        "fr": "Promo"
+      }
+    },
+    {
+      "id": "badge-mvom4lse-3d8aefb6",
+      "targetType": "battery",
+      "targetId": 0,
+      "variant": "badge",
+      "animated": true,
+      "label": {
+        "fr": "Promo"
+      }
+    }
+  ]
+}

@@ -1,0 +1,1475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f172a">
+<title>FITIA PRO TEST</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'none'; media-src 'none'; manifest-src 'self'; form-action 'none'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' https://*; script-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://raw.githubusercontent.com;">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="promotion-effects.css">
+<script src="vendor/ethers.umd.min.js"></script>
+<script src="vendor/three.min.js"></script>
+<script src="vendor/qrcode.js"></script>
+<script src="wallet.js"></script>
+</head>
+<body>
+<div role="alert" style="position:relative;z-index:9999;background:#7f1d1d;color:white;padding:12px;text-align:center;font-weight:bold">FITIA PRO TEST — transactions désactivées. Ne pas importer de portefeuille réel. Données réseau Mainnet encore visibles.</div>
+<div class="bg-glow"></div>
+<div id="toast-container"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     ÉCRAN DE SÉCURITÉ & PORTEFEUILLE INTÉGRÉ (ONBOARDING / VERROUILLAGE)
+     ═══════════════════════════════════════════════════════════════════ -->
+<div id="auth-screen" class="auth-screen">
+  <div class="auth-container">
+
+    <!-- 1. ACCUEIL PREMIÈRE OUVERTURE -->
+    <div id="auth-step-welcome" class="auth-step hidden">
+      <div class="auth-hero">
+        <div class="auth-logo-ring">
+          <img src="assets/icon-192.png" alt="FITIA PRO" class="auth-logo-img">
+        </div>
+        <h1 class="auth-title">FITIA <span class="pro-badge-lg">PRO</span></h1>
+      </div>
+
+      <div class="auth-actions">
+        <button class="btn-mega auth-btn-create" onclick="App.startCreateWallet()">
+          <span class="pulse-ring"></span>
+          <span data-i18n="createNewWallet">CREATE NEW WALLET</span>
+        </button>
+        <button class="btn-secondary-outline" onclick="App.startImportWallet()" data-i18n="importExistingWallet">
+           I already have a wallet (12 words / Key)
+        </button>
+        <a id="welcome-apk-download" href="FITIA-PRO-TEST.apk" download="FITIA-PRO-TEST.apk" class="apk-download-banner">
+          <div>
+            <strong data-i18n="downloadApkTitle">Download Android App (.APK)</strong>
+            <small data-i18n="downloadApkSub">Direct installation on your phone</small>
+          </div>
+        </a>
+      </div>
+    </div>
+
+    <!-- 2. SAUVEGARDE DE LA PHRASE DE 12 MOTS -->
+    <div id="auth-step-backup" class="auth-step hidden">
+      <div class="auth-top-bar">
+        <button class="auth-back-btn" onclick="App.showAuthStep('welcome')"><span data-i18n="back">Back</span></button>
+      </div>
+      <h2 class="auth-step-title" data-i18n="backupSeedTitle">Recovery Phrase (12 words)</h2>
+      <div class="security-warning-box">
+        <p data-i18n="backupSeedWarn">Write down these 12 words in exact order and keep them safe. Never share them: anyone with these words controls your funds.</p>
+      </div>
+
+      <div class="seed-addr-preview">
+        <span data-i18n="yourPolygonAddr">Polygon Address:</span>
+        <strong id="create-addr-preview">0x...</strong>
+      </div>
+
+      <div id="seed-words-grid" class="seed-grid blurred"></div>
+
+      <div class="seed-tools-row">
+        <button class="btn-chip" onclick="App.toggleSeedBlur()" id="btn-toggle-seed"><span data-i18n="revealWords">Show</span></button>
+        <button class="btn-chip accent" onclick="App.copyCreatedSeed()"><span data-i18n="copyWords">Copy 12 words</span></button>
+      </div>
+
+      <label class="seed-confirm-check">
+        <input type="checkbox" id="seed-saved-checkbox" onchange="App.onSeedCheckboxChange()">
+        <span data-i18n="confirmSavedSeed">I have written down and safely backed up my 12 words.</span>
+      </label>
+
+      <button id="btn-continue-verify" class="btn-primary" disabled onclick="App.goToSeedVerify()" data-i18n="continueBtn">CONTINUE →</button>
+    </div>
+
+    <!-- 3. VÉRIFICATION DES 12 MOTS -->
+    <div id="auth-step-verify" class="auth-step hidden">
+      <div class="auth-top-bar">
+        <button class="auth-back-btn" onclick="App.showAuthStep('backup')"><span data-i18n="back">Back</span></button>
+      </div>
+      <h2 class="auth-step-title" data-i18n="verifySeedTitle">Verify your backup</h2>
+      <p class="small-text" style="margin-bottom: 14px;" data-i18n="verifySeedDesc">Select the matching words for the requested positions.</p>
+
+      <div id="seed-quiz-container" class="seed-quiz-container"></div>
+
+      <button id="btn-verify-next" class="btn-primary" style="margin-top: 16px;" onclick="App.completeSeedVerify()" data-i18n="validateAndSetPin">VERIFY & SET MY PIN →</button>
+    </div>
+
+    <!-- 4. IMPORTATION DE PORTEFEUILLE (12/24 MOTS OU CLÉ PRIVÉE) -->
+    <div id="auth-step-import" class="auth-step hidden">
+      <div class="auth-top-bar">
+        <button class="auth-back-btn" onclick="App.cancelImportFlow()"><span data-i18n="back">Back</span></button>
+      </div>
+      <h2 class="auth-step-title" data-i18n="importTitle">Import a Wallet</h2>
+
+      <div class="shop-tabs" style="margin-bottom: 12px;">
+        <button id="tab-import-seed" class="shop-tab active" onclick="App.setImportMode('seed')" data-i18n="seedPhraseTab">Phrase (12/24 words)</button>
+        <button id="tab-import-pk" class="shop-tab" onclick="App.setImportMode('pk')" data-i18n="privateKeyTab">Private Key (0x...)</button>
+      </div>
+
+      <p id="import-hint-text" class="small-text" style="margin-bottom: 10px;" data-i18n="importSeedHint">Enter your 12 or 24 recovery words separated by spaces.</p>
+
+      <div class="import-textarea-wrap">
+        <textarea id="import-secret-input" class="game-input import-textarea" rows="4" placeholder="word1 word2 word3 ..." oninput="App.onImportInputChange()" autocomplete="off" autocapitalize="none" spellcheck="false"></textarea>
+        <button class="btn-paste-inline" onclick="App.pasteIntoImport()"><span data-i18n="paste">Paste</span></button>
+      </div>
+
+      <div id="import-detected-box" class="import-detected-box hidden">
+        <div>
+          <small data-i18n="detectedWallet">Detected Polygon Wallet:</small>
+          <strong id="import-detected-addr">0x...</strong>
+        </div>
+      </div>
+
+      <button id="btn-import-continue" class="btn-primary" style="margin-top: 14px;" disabled onclick="App.submitImportSecret()" data-i18n="continueToPin">SET MY 6-DIGIT PIN</button>
+    </div>
+
+    <!-- 5. CRÉATION / CONFIRMATION DU CODE PIN À 6 CHIFFRES -->
+    <div id="auth-step-setpin" class="auth-step hidden">
+      <div class="auth-top-bar">
+        <button class="auth-back-btn" onclick="App.backFromSetPin()"><span data-i18n="back">Back</span></button>
+      </div>
+      <div class="pin-header-box">
+        <h2 id="setpin-title" class="auth-step-title" data-i18n="createPinTitle">Create your PIN</h2>
+        <p id="setpin-subtitle" class="small-text" data-i18n="createPinDesc">Choose a 6-digit PIN to encrypt your wallet.</p>
+      </div>
+
+      <div id="setpin-dots" class="pin-dots">
+        <span></span><span></span><span></span><span></span><span></span><span></span>
+      </div>
+      <p id="setpin-error" class="pin-error-msg"></p>
+
+      <div class="pin-keypad">
+        <button type="button" class="pin-key" onclick="App.onSetPinDigit('1')">1</button>
+        <button type="button" class="pin-key" onclick="App.onSetPinDigit('2')">2</button>
+        <button type="button" class="pin-key" onclick="App.onSetPinDigit('3')">3</button>
+        <button type="button" class="pin-key" onclick="App.onSetPinDigit('4')">4</button>
+        <button type="button" class="pin-key" onclick="App.onSetPinDigit('5')">5</button>
+        <button type="button" class="pin-key" onclick="App.onSetPinDigit('6')">6</button>
+        <button type="button" class="pin-key" onclick="App.onSetPinDigit('7')">7</button>
+        <button type="button" class="pin-key" onclick="App.onSetPinDigit('8')">8</button>
+        <button type="button" class="pin-key" onclick="App.onSetPinDigit('9')">9</button>
+        <button type="button" class="pin-key pin-key-empty" disabled></button>
+        <button type="button" class="pin-key" onclick="App.onSetPinDigit('0')">0</button>
+        <button type="button" class="pin-key pin-key-action" onclick="App.onSetPinBackspace()" aria-label="Delete" data-i18n-aria-label="deleteDigit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 3H7c-.69 0-1.23.35-1.59.88L0 12l5.41 8.11c.36.53.9.89 1.59.89h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-3 12.59L17.59 17 14 13.41 10.41 17 9 15.59 12.59 12 9 8.41 10.41 7 14 10.59 17.59 7 19 8.41 15.41 12 19 15.59z"/></svg></button>
+      </div>
+    </div>
+
+    <!-- 6. ÉCRAN DE DÉVERROUILLAGE PAR CODE PIN / BIOMÉTRIE -->
+    <div id="auth-step-unlock" class="auth-step hidden">
+      <div class="pin-header-box" style="margin-top: 8px;">
+        <div class="auth-logo-ring sm">
+          <img src="assets/icon-192.png" alt="FITIA PRO" class="auth-logo-img">
+        </div>
+        <div class="unlock-wallet-chip">
+          <span class="status-dot"></span>
+          <span id="unlock-addr-badge">0x...</span>
+        </div>
+        <h2 class="auth-step-title" style="margin-top:10px;" data-i18n="unlockTitle">Unlock FITIA PRO</h2>
+        <p class="small-text" data-i18n="unlockDesc">Enter your 6-digit PIN</p>
+      </div>
+
+      <div id="unlock-dots" class="pin-dots">
+        <span></span><span></span><span></span><span></span><span></span><span></span>
+      </div>
+      <p id="unlock-error-msg" class="pin-error-msg"></p>
+
+      <div class="pin-keypad">
+        <button type="button" class="pin-key" onclick="App.onUnlockDigit('1')">1</button>
+        <button type="button" class="pin-key" onclick="App.onUnlockDigit('2')">2</button>
+        <button type="button" class="pin-key" onclick="App.onUnlockDigit('3')">3</button>
+        <button type="button" class="pin-key" onclick="App.onUnlockDigit('4')">4</button>
+        <button type="button" class="pin-key" onclick="App.onUnlockDigit('5')">5</button>
+        <button type="button" class="pin-key" onclick="App.onUnlockDigit('6')">6</button>
+        <button type="button" class="pin-key" onclick="App.onUnlockDigit('7')">7</button>
+        <button type="button" class="pin-key" onclick="App.onUnlockDigit('8')">8</button>
+        <button type="button" class="pin-key" onclick="App.onUnlockDigit('9')">9</button>
+        <button type="button" id="btn-unlock-bio" class="pin-key pin-key-action hidden" onclick="App.triggerBiometricUnlock()" title="Biométrie">BIO</button>
+        <button type="button" id="btn-unlock-spacer" class="pin-key pin-key-empty" disabled></button>
+        <button type="button" class="pin-key" onclick="App.onUnlockDigit('0')">0</button>
+        <button type="button" class="pin-key pin-key-action" onclick="App.onUnlockBackspace()" aria-label="Delete" data-i18n-aria-label="deleteDigit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 3H7c-.69 0-1.23.35-1.59.88L0 12l5.41 8.11c.36.53.9.89 1.59.89h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-3 12.59L17.59 17 14 13.41 10.41 17 9 15.59 12.59 12 9 8.41 10.41 7 14 10.59 17.59 7 19 8.41 15.41 12 19 15.59z"/></svg></button>
+      </div>
+
+      <button type="button" class="auth-link-btn" onclick="App.promptRestoreFromLock()" data-i18n="forgotPinLink">
+        Forgot PIN? Restore with 12-word phrase / key
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     COQUILLE PRINCIPALE DE L'APPLICATION (DÉVERROUILLÉE)
+     ═══════════════════════════════════════════════════════════════════ -->
+<div id="app-shell" class="app-shell hidden">
+<header>
+  <div class="brand">
+    <div class="logo-icon">⚡</div>
+    <div class="brand-text">FITIA <span class="pro-badge">PRO</span></div>
+  </div>
+  <div class="header-right">
+    <div id="lang-selector" class="lang-dropdown">
+      <button class="lang-btn" id="lang-btn-display" onclick="App.toggleLangMenu(event)">🇬🇧 EN</button>
+      <div class="lang-content" id="lang-menu-content">
+        <a href="#" onclick="App.setLanguage('fr'); return false;">🇫🇷 Français</a>
+        <a href="#" onclick="App.setLanguage('en'); return false;">🇬🇧 English</a>
+        <a href="#" onclick="App.setLanguage('de'); return false;">🇩🇪 Deutsch</a>
+        <a href="#" onclick="App.setLanguage('zh'); return false;">🇨🇳 中文</a>
+        <a href="#" onclick="App.setLanguage('sg'); return false;">🇸🇬 English (SG)</a>
+      </div>
+    </div>
+    <button id="btn-activity" class="btn-icon-header activity-bell" onclick="App.openActivity('notifications')" title="Notifications" aria-label="Ouvrir les notifications" aria-controls="modal-activity">
+      <span aria-hidden="true">🔔</span>
+      <span id="activity-unread-badge" class="activity-badge hidden" aria-label="Notifications non lues">0</span>
+    </button>
+    <button id="btn-settings-app" class="btn-icon-header settings-btn-header" onclick="App.openSecurityModal()" title="Paramètres" aria-label="Ouvrir les paramètres" aria-controls="modal-security">
+      <span aria-hidden="true">⚙️</span>
+    </button>
+    <button id="btn-lock-app" class="btn-icon-header" onclick="App.lockWallet()" title="Verrouiller">🔒</button>
+  </div>
+</header>
+
+<main id="main-view">
+  <!-- ═══ DASHBOARD ═══ -->
+  <div id="view-dashboard" class="view active">
+    <section id="announcement-center" class="announcement-center" role="region" aria-roledescription="carousel" aria-label="Annonces officielles FITIA">
+      <div id="announcement-viewport" class="announcement-viewport">
+        <div id="announcement-track" class="announcement-track"></div>
+      </div>
+      <div id="announcement-dots" class="announcement-dots" aria-label="Choisir une annonce"></div>
+    </section>
+
+    <div class="card total-balance-card">
+      <small data-i18n="totalBal">Solde Total Estimé</small>
+      <div class="total-val" id="val-total-usd">$0.00</div>
+      <div class="total-breakdown">
+        <span><span data-i18n="walletShort">Portefeuille</span>: <strong id="val-wallet-sub-usd">$0.00</strong></span>
+        <span>•</span>
+        <span><span data-i18n="miningShort">Minage</span>: <strong id="val-mining-sub-usd">$0.00</strong></span>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <small data-i18n="power">PUISSANCE</small>
+        <div class="stat-val" id="val-power">0 H/s</div>
+        <small data-i18n="ftaSec">Hashrate</small>
+      </div>
+      <div class="stat-card accent">
+        <small data-i18n="pending">EN ATTENTE</small>
+        <div class="stat-val" id="val-pending">0.00000000</div>
+        <small>FTA</small>
+      </div>
+    </div>
+
+    <div id="mining-visualizer" class="visualizer-wrap">
+      <canvas id="mining-canvas" aria-hidden="true"></canvas>
+      <div class="mining-room-floor" aria-hidden="true"></div>
+      <div class="mining-scene-topline">
+        <span class="mining-scene-heading"><i aria-hidden="true"></i><span>FITIA MINING<small>GPU COMPUTE ARRAY</small></span></span>
+        <strong id="viz-machine-count">—</strong>
+      </div>
+      <div id="mining-rig-stage" class="mining-rig-stage" aria-hidden="true"></div>
+      <div class="mining-energy-track" aria-hidden="true"><span></span><span></span><span></span></div>
+      <div class="viz-label" id="viz-status">STANDBY</div>
+      <div class="mining-bus-label" aria-hidden="true">POWER BUS</div>
+    </div>
+
+    <div id="active-machines-section" class="card" style="margin-bottom:15px;">
+      <h3 class="section-title" data-i18n="activeMachines">⛏️ Machines Actives</h3>
+      <div id="active-machines-list">
+        <p class="small-text" style="text-align:center;" data-i18n="noActiveMachines">Aucune machine active</p>
+      </div>
+    </div>
+
+    <button class="btn-mega" onclick="App.claim()">
+      <span class="pulse-ring"></span>
+      <span data-i18n="claim">RÉCLAMER</span>
+    </button>
+
+  </div>
+
+  <!-- ═══ FITIA STORE — PRODUITS PHYSIQUES ═══ -->
+  <div id="view-store" class="view">
+    <section class="store-hero">
+      <div class="store-hero-copy">
+        <span class="store-eyebrow">FITIA MARKETPLACE</span>
+        <h2>FITIA STORE</h2>
+        <span class="store-hero-line" aria-hidden="true"><i></i><i></i><i></i></span>
+      </div>
+      <button type="button" id="store-cart-button" class="store-round-button" onclick="App.storeCenter.openCart()" aria-label="Open cart">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2zM7.16 14.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03L21.7 4H5.21L4.27 2H1v2h2l3.6 7.59-1.35 2.44C4.52 15.37 5.48 17 7 17h12v-2H7.42c-.14 0-.25-.11-.26-.25z"/></svg>
+        <span id="store-cart-count" class="store-cart-badge hidden">0</span>
+      </button>
+    </section>
+    <div class="store-assurance" aria-label="Store services">
+      <span class="store-payment-pill">USDT</span><span class="store-payment-pill">FTA</span>
+      <span class="store-assurance-tracking"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h11v11H3zM14 10h4l3 3v4h-7zM7 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM18 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/></svg><span data-store-i18n="trackedDelivery">Tracked delivery</span></span>
+    </div>
+    <div class="store-actions-row">
+      <button type="button" id="store-orders-button" class="store-text-button store-orders-button" onclick="App.storeCenter.openOrders()">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 7 8-4 8 4v10l-8 4-8-4zM4 7l8 4 8-4M12 11v10M8 5l8 4"/></svg>
+        <span data-store-i18n="myOrders">My orders</span><span id="store-order-count" class="store-order-count hidden">0</span>
+      </button>
+      <button type="button" class="store-text-button store-refresh-button" onclick="App.storeCenter.manualRefresh()">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"/></svg><span data-store-i18n="refresh">Refresh</span>
+      </button>
+    </div>
+    <section id="store-delivery-network" class="store-delivery-network hidden" aria-labelledby="store-delivery-network-title">
+      <div class="store-delivery-heading">
+        <div><span class="store-section-kicker" data-store-i18n="globalNetwork">GLOBAL DELIVERY</span><h3 id="store-delivery-network-title" data-store-i18n="deliveryCountries">Partner & agent countries</h3></div>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>
+      </div>
+      <div class="store-country-viewport"><div id="store-country-track" class="store-country-track"></div></div>
+    </section>
+    <div class="store-filter-panel">
+      <label class="store-search-label"><span class="sr-only">Search products</span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg><input id="store-search-input" type="search" maxlength="100" data-store-i18n-placeholder="search" placeholder="Search products…" oninput="App.storeCenter.renderProducts()"></label>
+      <div class="store-filter-grid">
+        <select id="store-category-filter" aria-label="Product category" onchange="App.storeCenter.renderProducts()"><option value="all">All categories</option></select>
+        <select id="store-source-filter" aria-label="Fulfillment type" onchange="App.storeCenter.renderProducts()"><option value="all" data-store-i18n="allSources">All sellers</option><option value="own" data-store-i18n="ownStock">Own stock</option><option value="dropshipping">Dropshipping</option></select>
+        <select id="store-token-filter" aria-label="Payment token" onchange="App.storeCenter.renderProducts()"><option value="all">USDT + FTA</option><option value="USDT">USDT</option><option value="FTA">FTA</option></select>
+      </div>
+    </div>
+    <p id="store-catalog-status" class="store-catalog-status" role="status"></p>
+    <div class="store-products-heading"><h3 data-store-i18n="catalogTitle">Products</h3><span id="store-product-count">0</span></div>
+    <div id="store-product-grid" class="store-product-grid"></div>
+    <div id="store-empty" class="store-empty hidden">
+      <img src="assets/icon-192.png" width="60" height="60" alt="">
+      <h3 data-store-i18n="emptyTitle">No products available</h3>
+    </div>
+  </div>
+
+  <!-- ═══ FITIA FARM — FERME 3D & ÉCONOMIE FTA ═══ -->
+  <div id="view-farm" class="view farm-view">
+    <section class="farm-hero">
+      <div class="farm-hero-brand">
+        <img src="assets/farm/barn.svg" width="54" height="54" alt="" draggable="false">
+        <div><span class="farm-eyebrow">FITIA</span><h2>FARM</h2></div>
+      </div>
+      <button type="button" class="farm-round-button" onclick="App.farmCenter.manualRefresh()" aria-label="Refresh farm"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"/></svg></button>
+    </section>
+
+    <section class="farm-wallet-strip">
+      <div class="farm-coin-balance"><img src="assets/farm/coins.svg" width="42" height="42" alt="" draggable="false"><strong id="farm-coin-balance">0</strong></div>
+      <div class="farm-wallet-actions">
+        <button type="button" class="farm-primary-button" onclick="App.farmCenter.openDeposit()"><img src="assets/fta.png" width="20" height="20" alt="">CONVERT</button>
+        <button type="button" class="farm-secondary-button" data-farm-requires-start onclick="App.farmCenter.openWithdraw()">WITHDRAW FTA</button>
+      </div>
+      <p id="farm-deposit-pending" class="farm-pending-note hidden">FTA deposit pending confirmation.</p>
+    </section>
+
+    <section class="farm-scene-card">
+      <div class="farm-scene-toolbar">
+        <div class="farm-view-presets" aria-label="Camera views">
+          <button type="button" onclick="App.farmCenter.focusCamera('overview')">Farm</button>
+          <button type="button" onclick="App.farmCenter.focusCamera('crops')">Crops</button>
+          <button type="button" onclick="App.farmCenter.focusCamera('animals')">Animals</button>
+        </div>
+      </div>
+      <div id="farm-3d-container" class="farm-3d-container">
+        <div id="farm-3d-loading" class="farm-3d-loading"><span class="farm-loader-ring"></span><span class="sr-only">Loading</span></div>
+        <div class="farm-camera-controls" aria-label="3D camera controls">
+          <button type="button" onclick="App.farmCenter.rotateCamera(1)" aria-label="Rotate camera left">↶</button>
+          <button type="button" onclick="App.farmCenter.focusCamera('overview')" aria-label="Reset camera">⌂</button>
+          <button type="button" onclick="App.farmCenter.rotateCamera(-1)" aria-label="Rotate camera right">↷</button>
+          <button type="button" onclick="App.farmCenter.zoomCamera(1.18)" aria-label="Zoom out">−</button>
+          <button type="button" onclick="App.farmCenter.zoomCamera(0.84)" aria-label="Zoom in">+</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="farm-start-card" class="farm-start-card">
+      <div class="farm-section-heading"><h3>Get started</h3></div>
+      <div id="farm-land-check" class="farm-check-row">
+        <span class="farm-check-mark">1</span><strong>Terrain</strong><b id="farm-land-status">500 coins</b>
+        <button id="farm-buy-land" type="button" class="farm-small-button" onclick="App.farmCenter.openBuyLand()">BUY</button>
+      </div>
+      <div id="farm-animal-check" class="farm-check-row">
+        <span class="farm-check-mark">2</span><strong>First animal</strong><b id="farm-animal-status">Required</b>
+        <button id="farm-buy-first-animal" type="button" class="farm-small-button" onclick="App.farmCenter.openBuyAnimal()">CHOOSE</button>
+      </div>
+    </section>
+
+    <section class="farm-quick-actions" aria-label="Farm actions">
+      <button type="button" data-farm-requires-land onclick="App.farmCenter.openBuyLand()"><img src="assets/farm/terrain.svg" alt=""><strong>Terrain</strong></button>
+      <button type="button" data-farm-requires-land onclick="App.farmCenter.openBuyAnimal()"><img src="assets/farm/chicken.svg" alt=""><strong>Animals</strong></button>
+      <button type="button" data-farm-requires-start onclick="App.farmCenter.openPlant()"><img src="assets/farm/wheat.svg" alt=""><strong>Plant</strong></button>
+      <button type="button" data-farm-requires-start onclick="App.farmCenter.openBuyFeed()"><img src="assets/farm/feed.svg" alt=""><strong>Feed</strong></button>
+      <button type="button" id="farm-sell-inventory" data-farm-requires-start onclick="App.farmCenter.openSell()"><img src="assets/farm/barn.svg" alt=""><strong>Sell</strong></button>
+    </section>
+
+    <nav class="farm-tabs" role="tablist" aria-label="Farm management">
+      <button type="button" class="active" data-farm-tab="overview" role="tab" aria-selected="true" onclick="App.farmCenter.setTab('overview')">Overview</button>
+      <button type="button" data-farm-tab="animals" role="tab" aria-selected="false" onclick="App.farmCenter.setTab('animals')">Animals</button>
+      <button type="button" data-farm-tab="crops" role="tab" aria-selected="false" onclick="App.farmCenter.setTab('crops')">Crops</button>
+      <button type="button" data-farm-tab="barn" role="tab" aria-selected="false" onclick="App.farmCenter.setTab('barn')">Barn</button>
+    </nav>
+
+    <section data-farm-panel="overview" class="farm-panel">
+      <div class="farm-stats-grid">
+        <article><span>ANIMALS</span><strong id="farm-animal-count">0</strong></article>
+        <article><span>CROPS</span><strong id="farm-crop-count">0</strong></article>
+        <article><span>FEED</span><strong id="farm-feed-count">0</strong></article>
+        <article><span>BARN</span><strong id="farm-inventory-value">0</strong></article>
+      </div>
+      <div class="farm-section-heading farm-withdrawal-heading"><h3>Withdrawals</h3><button type="button" class="farm-text-button" data-farm-requires-start onclick="App.farmCenter.openWithdraw()">New request</button></div>
+      <div id="farm-withdrawal-list" class="farm-withdrawal-list"></div>
+      <p id="farm-withdrawals-empty" class="farm-empty-copy">No withdrawals.</p>
+    </section>
+
+    <section data-farm-panel="animals" class="farm-panel hidden">
+      <div class="farm-section-heading"><h3>Animals</h3><button type="button" class="farm-text-button" data-farm-requires-land onclick="App.farmCenter.openBuyAnimal()">+ Add</button></div>
+      <div id="farm-animal-list" class="farm-item-list"></div>
+      <div id="farm-animals-empty" class="farm-empty-state"><img src="assets/farm/sheep.svg" width="84" height="84" alt=""><strong>No animals</strong></div>
+    </section>
+
+    <section data-farm-panel="crops" class="farm-panel hidden">
+      <div class="farm-section-heading"><h3>Crops</h3><button type="button" class="farm-text-button" data-farm-requires-start onclick="App.farmCenter.openPlant()">+ Plant</button></div>
+      <div id="farm-crop-list" class="farm-item-list"></div>
+      <div id="farm-crops-empty" class="farm-empty-state"><img src="assets/farm/carrot.svg" width="84" height="84" alt=""><strong>No active crops</strong></div>
+    </section>
+
+    <section data-farm-panel="barn" class="farm-panel hidden">
+      <div class="farm-section-heading"><h3>Barn</h3><button type="button" class="farm-text-button" onclick="App.farmCenter.openSell()">Sell all</button></div>
+      <div id="farm-inventory-list" class="farm-inventory-grid"></div>
+    </section>
+  </div>
+
+  <!-- ═══ SHOP MINAGE ═══ -->
+  <div id="view-shop" class="view">
+    <div class="shop-header">
+      <h2 class="view-title" style="margin-bottom:0;" data-i18n="shopTitle">⛏️ Boutique</h2>
+      <div class="toggle-pay">
+        <button id="btn-pay-usdt" class="toggle-btn active" onclick="App.setPayMode('USDT')" aria-pressed="true"><img src="assets/usdt.svg" alt="" width="18" height="18" aria-hidden="true"><span>USDT</span></button>
+        <button id="btn-pay-fta" class="toggle-btn" onclick="App.setPayMode('FTA')" aria-pressed="false"><img src="assets/fta.png" alt="" width="18" height="18" aria-hidden="true"><span>FTA</span></button>
+      </div>
+    </div>
+    <div class="shop-balance-strip">
+      <span><span data-i18n="availUsdt">Dispo USDT</span>: <strong id="shop-avail-usdt">0.00</strong></span>
+      <span>•</span>
+      <span><span data-i18n="availFta">Dispo FTA</span>: <strong id="shop-avail-fta">0.0000</strong></span>
+    </div>
+    <div class="shop-tabs">
+      <button class="shop-tab active" onclick="App.setShopView('machines', this)"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="12" r="3.5"/><circle cx="16" cy="12" r="2.5"/><path d="M9 8.5v7M5.5 12h7M16 9.5v5M13.5 12h5"/></svg><span data-i18n="machines">Machines</span></button>
+      <button class="shop-tab" onclick="App.setShopView('batteries', this)"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="6" width="14" height="15" rx="3"/><path d="M9 3h6v3M12 10v7M8.5 13.5h7"/></svg><span data-i18n="batteries">Batteries</span></button>
+    </div>
+    <div id="shop-list" class="grid-list"></div>
+  </div>
+
+  <!-- ═══ WALLET & ASSETS ═══ -->
+  <div id="view-my-rigs" class="view">
+    <h2 class="view-title" data-i18n="myAssets">⚙️ Portefeuille & Actifs</h2>
+
+    <!-- CARTE 1 : PORTEFEUILLE POLYGON ON-CHAIN -->
+    <div class="card wallet-main-card">
+      <div class="wallet-card-header">
+        <div>
+          <h3 data-i18n="onchainWalletTitle">🔐 Mon Portefeuille Polygon</h3>
+          <div class="wallet-addr-inline" onclick="App.copyReceiveAddress()">
+            <span id="wallet-card-addr">0x...</span>
+            <span>📋</span>
+          </div>
+        </div>
+        <div class="wallet-main-actions">
+          <button class="btn-wallet-main btn-wallet-sec" onclick="App.openSecurityModal()" title="Sécurité">🛡️</button>
+        </div>
+      </div>
+
+      <div class="wallet-primary-actions" role="group" aria-label="Wallet actions">
+        <button type="button" class="btn-wallet-main btn-wallet-send wallet-primary-action" onclick="App.openSend()">
+          <span class="wallet-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 17 17 7M7 7h10v10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="wallet-action-copy"><strong data-i18n="send">Envoyer</strong></span>
+        </button>
+        <button type="button" class="btn-wallet-main btn-wallet-recv wallet-primary-action" onclick="App.openReceive()">
+          <span class="wallet-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M17 7 7 17M17 17H7V7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="wallet-action-copy"><strong data-i18n="receive">Recevoir</strong></span>
+        </button>
+      </div>
+
+      <button class="wallet-history-btn" onclick="App.openActivity('history')">
+        <span>🕘 Historique &amp; activité</span>
+        <span id="wallet-pending-count" class="wallet-pending-count">À jour</span>
+      </button>
+
+      <div id="gas-warning-banner" class="gas-warning-banner hidden" onclick="App.openReceive()">
+        <span>⛽</span>
+        <span data-i18n="lowPolGasWarn">Ajoutez un peu de POL (~0.05 POL) à votre adresse pour payer les frais réseau Polygon.</span>
+      </div>
+
+      <!-- POL -->
+      <div class="wallet-token-row">
+        <img src="assets/pol.svg" class="token-img-lg" alt="POL">
+        <div class="token-info">
+          <span class="token-name">POL <small class="token-tag">Polygon Gas</small></span>
+          <span class="token-bal" id="bal-pol">0.0000</span>
+          <span class="token-bal-usd" id="bal-pol-usd">≈ $0.00</span>
+        </div>
+        <div class="token-price-col">
+          <span class="token-unit-price" id="price-pol">$0.00</span>
+          <span class="token-change flat" id="change-pol">0.00%</span>
+        </div>
+      </div>
+
+      <!-- USDT (On-Chain Wallet) -->
+      <div class="wallet-token-row">
+        <img src="assets/usdt.svg" class="token-img-lg" alt="USDT">
+        <div class="token-info">
+          <span class="token-name">USDT <small class="token-tag">ERC-20</small></span>
+          <span class="token-bal" id="bal-wallet-usdt">0.00</span>
+          <span class="token-bal-usd" id="bal-wallet-usdt-usd">≈ $0.00</span>
+        </div>
+        <div class="token-price-col">
+          <span class="token-unit-price" id="price-usdt">$1.00</span>
+          <span class="token-change flat" id="change-usdt">0.00%</span>
+        </div>
+      </div>
+
+      <!-- FTA (On-Chain Wallet) -->
+      <div class="wallet-token-row">
+        <img src="assets/fta.png" class="token-img-lg" alt="FTA">
+        <div class="token-info">
+          <span class="token-name">FTA <small class="token-tag">Fitia</small></span>
+          <span class="token-bal" id="bal-wallet-fta">0.0000</span>
+          <span class="token-bal-usd" id="bal-wallet-fta-usd">≈ $0.00</span>
+        </div>
+        <div class="token-price-col">
+          <span class="token-unit-price" id="price-fta">$0.00</span>
+          <span class="token-change flat" id="change-fta">0.00%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- CARTE 2 : COMPTE MINAGE INTERNE (CONTRAT FITIA CORE) -->
+    <div class="card mining-vault-card">
+      <div class="mining-vault-header">
+        <h3 data-i18n="miningVaultTitle">⚡ Compte Minage</h3>
+        <p class="small-text hidden" data-i18n="miningVaultDesc">Solde utilisé pour la boutique, le swap et vos récompenses de minage. Déposez ou retirez vers votre portefeuille à tout moment.</p>
+      </div>
+
+      <div class="mining-balances-grid">
+        <div class="mining-bal-box">
+          <small>USDT Minage</small>
+          <strong id="bal-usdt">0.00</strong>
+          <span id="bal-usdt-usd">≈ $0.00</span>
+        </div>
+        <div class="mining-bal-box">
+          <small>FTA Minage</small>
+          <strong id="bal-fta">0.0000</strong>
+          <span id="bal-fta-usd">≈ $0.00</span>
+        </div>
+      </div>
+
+      <!-- Dépôt / Retrait entre Portefeuille Polygon et Contrat Core -->
+      <div class="wallet-action-bar">
+        <input type="hidden" id="deposit-token-select" value="USDT">
+        <div class="transfer-token-selector" role="group" aria-label="Token">
+          <button type="button" class="transfer-token-option active" data-transfer-token="USDT" onclick="App.onTransferTokenChange('USDT')" aria-pressed="true">
+            <img src="assets/usdt.svg" width="24" height="24" alt="" draggable="false" aria-hidden="true"><span>USDT</span>
+          </button>
+          <button type="button" class="transfer-token-option" data-transfer-token="FTA" onclick="App.onTransferTokenChange('FTA')" aria-pressed="false">
+            <img src="assets/fta.png" width="24" height="24" alt="" draggable="false" aria-hidden="true"><span>FTA</span>
+          </button>
+        </div>
+        <div class="amount-max-wrap">
+          <input type="number" id="deposit-amount" class="game-input wallet-amount-input" placeholder="Montant" step="any" data-i18n-placeholder="amount">
+          <button type="button" class="btn-max-inline" onclick="App.fillMaxDeposit()">MAX</button>
+        </div>
+        <button class="btn-wallet-action btn-wallet-deposit" onclick="App.deposit()" data-i18n="depositBtn">DÉPOSER</button>
+        <button class="btn-wallet-action btn-wallet-withdraw" onclick="App.withdraw()" data-i18n="withdrawBtn">RETIRER</button>
+      </div>
+    </div>
+
+    <!-- Mes Machines -->
+    <div class="card" style="margin-bottom: 15px; border-color: rgba(16, 185, 129, 0.2);">
+      <h3 class="section-title" id="title-my-machines" data-i18n="myMachines">⛏️ Mes Machines</h3>
+      <div id="my-machines-list"><p class="small-text" style="text-align:center;" data-i18n="noMachines">Aucune machine</p></div>
+    </div>
+
+    <!-- Mes Batteries -->
+    <div class="card" style="margin-bottom: 15px; border-color: rgba(139, 92, 246, 0.2);">
+      <h3 class="section-title" id="title-my-batteries" data-i18n="myBatteries">🔋 Mes Batteries</h3>
+      <div id="my-batteries-list"><p class="small-text" style="text-align:center;" data-i18n="noBatteries">Aucune batterie</p></div>
+    </div>
+
+    <!-- Connexion visuelle Machine / Batterie -->
+    <div id="plug-machine-card" class="card plug-machine-card">
+      <div class="plug-card-header">
+        <div class="plug-heading-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 22v-5M8 8V3m8 5V3M6 8h12v3a6 6 0 0 1-12 0V8Z"/></svg>
+        </div>
+        <div class="plug-heading-copy">
+          <h3 data-i18n="plugMachine">Connexion machine &amp; batterie</h3>
+        </div>
+      </div>
+
+      <div class="plug-selector-block">
+        <div class="plug-section-heading">
+          <strong id="plug-machine-step-label" data-i18n="plugMachineStep">1. Choisissez une machine</strong>
+          <span id="plug-machine-count" class="plug-count" aria-hidden="true">0</span>
+        </div>
+        <input type="hidden" id="plug-machine-id" value="">
+        <div id="plug-machine-options" class="plug-options" role="group" aria-labelledby="plug-machine-step-label">
+          <p class="plug-options-empty" data-i18n="noMachines">Aucune machine</p>
+        </div>
+      </div>
+
+      <div class="plug-selector-block">
+        <div class="plug-section-heading">
+          <strong id="plug-battery-step-label" data-i18n="plugBatteryStep">2. Choisissez une batterie</strong>
+          <span id="plug-battery-count" class="plug-count plug-count-battery" aria-hidden="true">0</span>
+        </div>
+        <input type="hidden" id="plug-battery-type" value="">
+        <div id="plug-battery-options" class="plug-options" role="group" aria-labelledby="plug-battery-step-label">
+          <p class="plug-options-empty" data-i18n="noBatteries">Aucune batterie</p>
+        </div>
+      </div>
+
+      <div class="plug-preview">
+        <div class="plug-preview-topline">
+          <span data-i18n="plugPreview">Aperçu de connexion</span>
+          <span id="plug-status-badge" class="plug-status-badge" data-i18n="plugNotReady">À configurer</span>
+        </div>
+        <div class="plug-preview-flow">
+          <div id="plug-preview-machine" class="plug-preview-node">
+            <span id="plug-preview-machine-icon" class="plug-preview-icon" aria-hidden="true">
+              <svg viewBox="0 0 50 50" class="plug-placeholder-svg"><rect x="5" y="4" width="40" height="42" rx="7"/><rect x="11" y="12" width="12" height="17" rx="2"/><rect x="27" y="12" width="12" height="17" rx="2"/><circle cx="18" cy="37" r="5"/><circle cx="32" cy="37" r="5"/></svg>
+            </span>
+            <strong id="plug-preview-machine-name" data-i18n="selectMachinePrompt">Machine à sélectionner</strong>
+          </div>
+          <div id="plug-connector" class="plug-connector" aria-hidden="true">
+            <span class="plug-connector-line"></span>
+            <span class="plug-connector-bolt"><svg viewBox="0 0 24 24"><path d="m13 2-8 12h7l-1 8 8-12h-7l1-8Z"/></svg></span>
+            <span class="plug-energy-pulse"></span>
+          </div>
+          <div id="plug-preview-battery" class="plug-preview-node">
+            <span id="plug-preview-battery-icon" class="plug-preview-icon" aria-hidden="true">
+              <svg viewBox="0 0 50 50" class="plug-placeholder-svg"><rect x="5" y="15" width="36" height="22" rx="5"/><path d="M43 21v10m-31-5h19"/></svg>
+            </span>
+            <strong id="plug-preview-battery-name" data-i18n="selectBatteryPrompt">Batterie à sélectionner</strong>
+          </div>
+        </div>
+        <p id="plug-summary" class="plug-summary" aria-live="polite" data-i18n="selectMachineToContinue">Sélectionnez une machine disponible.</p>
+      </div>
+
+      <button type="button" id="btn-plug-machine" class="plug-submit" onclick="App.plugInMachine()" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22v-5M8 8V3m8 5V3M6 8h12v3a6 6 0 0 1-12 0V8Z"/></svg>
+        <span data-i18n="plugAction">CONNECTER LA MACHINE</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══ SWAP ═══ -->
+  <div id="view-swap" class="view">
+    <h2 class="view-title" data-i18n="swapTitle">💱 Échange</h2>
+    <div class="card swap-interface">
+      <div class="swap-market">
+        <span class="swap-market-label" id="swap-market-label" data-i18n="swapMarket">Marché</span>
+        <div class="swap-market-options" role="group" aria-labelledby="swap-market-label">
+          <button type="button" class="swap-market-option active" data-swap-market="CORE_FTA" onclick="App.setSwapMarket('CORE_FTA')" aria-pressed="true">
+            <span class="swap-market-icons" aria-hidden="true">
+              <img src="assets/usdt.svg" width="30" height="30" alt="" draggable="false">
+              <img src="assets/fta.png" width="30" height="30" alt="" draggable="false">
+            </span>
+            <span class="swap-market-copy"><strong>USDT / FTA</strong><small>FITIA Core</small></span>
+            <svg class="swap-market-check" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z" fill="currentColor"/></svg>
+          </button>
+          <button type="button" class="swap-market-option" data-swap-market="POL_USDT" onclick="App.setSwapMarket('POL_USDT')" aria-pressed="false">
+            <span class="swap-market-icons" aria-hidden="true">
+              <img src="assets/pol.svg" width="30" height="30" alt="" draggable="false">
+              <img src="assets/usdt.svg" width="30" height="30" alt="" draggable="false">
+            </span>
+            <span class="swap-market-copy"><strong>POL / USDT</strong><small>QuickSwap V2</small></span>
+            <svg class="swap-market-check" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z" fill="currentColor"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="swap-header">
+        <span data-i18n="youPay">Vous payez</span>
+        <span class="swap-bal-clickable" onclick="App.fillMaxSwap()"><span data-i18n="balance">Solde:</span> <strong id="swap-bal-from">0</strong> <span class="max-pill">MAX</span></span>
+      </div>
+      <div class="input-wrap">
+        <input type="number" id="swap-from-in" placeholder="0.0" min="0" step="any" oninput="App.calcSwap()">
+        <div class="token-select" onclick="App.toggleSwap()" id="token-from-display"><img id="token-from-logo" class="swap-token-logo" src="assets/usdt.svg" width="26" height="26" alt="" draggable="false" aria-hidden="true"><span id="token-from-symbol">USDT</span></div>
+      </div>
+      <div class="swap-arrow-wrap"><div class="swap-arrow" onclick="App.toggleSwap()">⇅</div></div>
+      <div class="swap-header"><span data-i18n="youReceive">Vous recevez</span><span><span data-i18n="balance">Solde:</span> <span id="swap-bal-to">0</span></span></div>
+      <div class="input-wrap">
+        <input type="number" id="swap-to-in" placeholder="0.0" step="any" readonly>
+        <div class="token-select token-select-static" id="token-to-display"><img id="token-to-logo" class="swap-token-logo" src="assets/fta.png" width="26" height="26" alt="" draggable="false" aria-hidden="true"><span id="token-to-symbol">FTA</span></div>
+      </div>
+      <div id="swap-details" class="swap-details hidden">
+        <div class="swap-detail-row"><span class="swap-detail-label" data-i18n="exchangeRate">Taux de change</span><span class="swap-detail-value" id="swap-detail-rate">—</span></div>
+        <div class="swap-detail-row"><span class="swap-detail-label" id="swap-detail-impact-label" data-i18n="priceImpact">Impact prix</span><span class="swap-detail-value" id="swap-detail-impact">&lt; 2%</span></div>
+        <div class="swap-detail-row"><span class="swap-detail-label" id="swap-detail-fee-label" data-i18n="swapFee">Frais swap (4%)</span><span class="swap-detail-value" id="swap-detail-fee">—</span></div>
+        <div class="swap-detail-row"><span class="swap-detail-label" data-i18n="minimumReceived">Minimum reçu</span><span class="swap-detail-value" id="swap-detail-min">—</span></div>
+        <div class="swap-detail-row"><span class="swap-detail-label" data-i18n="slippageTolerance">Tolérance slippage</span><span class="swap-detail-value swap-slippage" id="swap-detail-slippage">0.5%</span></div>
+      </div>
+      <div class="rate-info" id="swap-rate"></div>
+      <button class="btn-primary" id="btn-execute-swap" style="margin-top:12px;" onclick="App.executeSwap()" data-i18n="swap">ÉCHANGER</button>
+    </div>
+  </div>
+
+  <!-- ═══ HUB — ACCÈS SECONDAIRES ═══ -->
+  <div id="view-hub" class="view hub-view">
+    <div class="hub-header"><span>FITIA</span><h2>HUB</h2></div>
+    <div class="hub-grid">
+      <button type="button" class="hub-card hub-card-farm" onclick="App.nav('farm')">
+        <span class="hub-card-icon" aria-hidden="true"><img class="hub-farm-logo" src="assets/farm/barn.svg" width="40" height="40" alt="" draggable="false"></span><strong>FARM</strong><span class="hub-chevron">›</span>
+      </button>
+      <button type="button" class="hub-card hub-card-swap" onclick="App.nav('swap')">
+        <span class="hub-card-icon hub-swap-icons" aria-hidden="true"><img src="assets/usdt.svg" width="26" height="26" alt="" draggable="false"><img src="assets/fta.png" width="26" height="26" alt="" draggable="false"></span><strong>Swap</strong><span class="hub-chevron">›</span>
+      </button>
+      <button type="button" class="hub-card hub-card-wheel" data-game-id="wheel" onclick="App.nav('wheel')">
+        <span class="hub-card-icon" aria-hidden="true"><img class="hub-wheel-logo" src="assets/lucky-wheel.svg" width="44" height="44" alt="" draggable="false"></span><strong>Lucky Wheel</strong><span class="hub-chevron">›</span>
+      </button>
+      <button type="button" class="hub-card hub-card-dice" data-game-id="dice" onclick="App.nav('dice')">
+        <span class="hub-card-icon" aria-hidden="true"><img class="hub-dice-logo" src="assets/dice.svg" width="48" height="48" alt="" draggable="false"></span><strong>FITA Dice 3D</strong><span class="hub-chevron">›</span>
+      </button>
+      <button type="button" class="hub-card hub-card-mines" data-game-id="mines" onclick="App.nav('mines')">
+        <span class="hub-card-icon" aria-hidden="true"><img src="assets/mines.svg" width="48" height="48" alt="" draggable="false"></span><strong>FITA Mines 3D</strong><span class="hub-chevron">›</span>
+      </button>
+      <button type="button" class="hub-card hub-card-crash" data-game-id="crash" onclick="App.nav('crash')">
+        <span class="hub-card-icon" aria-hidden="true"><img src="assets/crash.svg" width="48" height="48" alt="" draggable="false"></span><strong>FITA Crash</strong><span class="hub-chevron">›</span>
+      </button>
+      <button type="button" class="hub-card hub-card-coin-flip" data-game-id="coin-flip" onclick="App.nav('coin-flip')">
+        <span class="hub-card-icon" aria-hidden="true"><img src="assets/coin-flip.svg" width="54" height="54" alt="" draggable="false"></span><strong>Coin Flip 3D</strong><span class="hub-chevron">›</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══ LUCKY WHEEL — TIRAGES SERVEUR ═══ -->
+  <div id="view-wheel" class="view wheel-view">
+    <div class="wheel-header">
+      <button type="button" class="wheel-back-button" onclick="App.nav('hub')" aria-label="Back to Hub"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button>
+      <div><span>FITIA GAMES</span><h2>Lucky Wheel</h2></div>
+      <button id="wheel-open-info" type="button" class="wheel-info-button" aria-label="View probabilities">ODDS</button>
+    </div>
+    <section class="wheel-hero">
+      <img src="assets/lucky-wheel.svg" width="76" height="76" alt="" draggable="false">
+      <div><span>COIN BALANCE</span><strong id="wheel-coin-balance">0</strong></div>
+      <div class="wheel-hero-stat"><span>BONUS</span><strong id="wheel-bonus-count">0</strong></div>
+    </section>
+    <section id="wheel-locked" class="wheel-locked hidden">
+      <strong>FARM activation required</strong>
+      <button id="wheel-open-farm" type="button" class="farm-small-button">OPEN FARM</button>
+    </section>
+    <div id="wheel-game" class="wheel-game">
+      <div class="wheel-status-strip">
+        <div><span>FREE · 24H</span><strong id="wheel-free-status" class="ready">FREE SPIN</strong></div>
+        <div class="wheel-mode-tabs" role="tablist" aria-label="Spin mode">
+          <button type="button" data-wheel-mode="free" role="tab">FREE</button>
+          <button type="button" data-wheel-mode="paid" role="tab" class="active">COINS</button>
+          <button type="button" data-wheel-mode="bonus" role="tab">BONUS</button>
+        </div>
+      </div>
+      <section class="wheel-stage" aria-label="Lucky Wheel game">
+        <div class="wheel-ambient"></div>
+        <div class="wheel-pointer" aria-hidden="true"><i></i></div>
+        <canvas id="lucky-wheel-canvas" width="360" height="360" role="img" aria-label="Animated Lucky Wheel"></canvas>
+        <div id="wheel-celebration" class="wheel-celebration" aria-hidden="true"></div>
+      </section>
+      <section id="wheel-result" class="wheel-result hidden" aria-live="polite">
+        <span>LAST RESULT</span><strong id="wheel-result-title"></strong><small id="wheel-result-detail"></small>
+      </section>
+      <div class="wheel-stake-heading"><span>COIN STAKE</span><b>1 FTA = 100 COINS</b></div>
+      <div class="wheel-stakes" aria-label="Coin stake">
+        <button type="button" data-wheel-stake="50" class="active" aria-pressed="true">50</button>
+        <button type="button" data-wheel-stake="100" aria-pressed="false">100</button>
+        <button type="button" data-wheel-stake="200" aria-pressed="false">200</button>
+        <button type="button" data-wheel-stake="500" aria-pressed="false">500</button>
+      </div>
+      <button id="wheel-spin-button" type="button" class="wheel-spin-button"><span>SPIN · 50 COINS</span><i aria-hidden="true"></i></button>
+      <p id="wheel-status" class="wheel-status hidden" role="alert"></p>
+    </div>
+    <section class="wheel-history">
+      <div class="wheel-section-heading"><h3>Spin history</h3><span>RECENT</span></div>
+      <p id="wheel-history-empty" class="wheel-history-empty">No spins yet</p>
+      <div id="wheel-history-list" class="wheel-history-list"></div>
+    </section>
+  </div>
+
+  <!-- ═══ FITA DICE 3D — TIRAGE ET COMPTE FARM SERVEUR ═══ -->
+  <div id="view-dice" class="view dice-view">
+    <div class="dice-header">
+      <button type="button" class="dice-back-button" onclick="App.nav('hub')" aria-label="Back to Hub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>
+      <div><span>FITIA GAMES</span><h2>FITA Dice 3D</h2></div>
+      <button id="dice-open-info" type="button" class="dice-info-button" aria-label="View dice probabilities">ODDS</button>
+    </div>
+    <section class="dice-hero">
+      <img src="assets/dice.svg" width="66" height="66" alt="" draggable="false">
+      <div><span>COIN BALANCE</span><strong id="dice-coin-balance">0</strong></div>
+      <div class="dice-hero-stat"><span>ROLLS</span><strong id="dice-total-rolls">0</strong></div>
+    </section>
+    <section id="dice-locked" class="dice-locked hidden">
+      <strong>FARM activation required</strong>
+      <button id="dice-open-farm" type="button" class="farm-small-button">OPEN FARM</button>
+    </section>
+    <div id="dice-game" class="dice-game">
+      <section class="dice-stage" aria-label="FITA Dice 3D game">
+        <div class="dice-stage-glow" aria-hidden="true"></div>
+        <div id="dice-3d-container" class="dice-3d-container" role="img" aria-label="Animated six-sided dice">
+          <img src="assets/dice.svg" width="150" height="150" alt="" draggable="false">
+        </div>
+        <div id="dice-celebration" class="dice-celebration" aria-hidden="true"></div>
+      </section>
+      <section id="dice-result" class="dice-result hidden" aria-live="polite">
+        <span>LAST RESULT</span><strong id="dice-result-title"></strong><small id="dice-result-detail"></small>
+      </section>
+      <div class="dice-control-heading"><span>ROLL UNDER</span><b>1–6 · FAIR DRAW</b></div>
+      <div class="dice-targets" role="group" aria-label="Winning target">
+        <button type="button" data-dice-target="2" aria-label="Win on roll 1. Chance 16.67 percent" aria-pressed="false"><strong>&lt;2</strong><span>16.67%</span></button>
+        <button type="button" data-dice-target="3" aria-label="Win on rolls 1 to 2. Chance 33.33 percent" aria-pressed="false"><strong>&lt;3</strong><span>33.33%</span></button>
+        <button type="button" data-dice-target="4" class="active" aria-label="Win on rolls 1 to 3. Chance 50 percent" aria-pressed="true"><strong>&lt;4</strong><span>50%</span></button>
+        <button type="button" data-dice-target="5" aria-label="Win on rolls 1 to 4. Chance 66.67 percent" aria-pressed="false"><strong>&lt;5</strong><span>66.67%</span></button>
+        <button type="button" data-dice-target="6" aria-label="Win on rolls 1 to 5. Chance 83.33 percent" aria-pressed="false"><strong>&lt;6</strong><span>83.33%</span></button>
+      </div>
+      <section class="dice-quote" aria-label="Potential payout" aria-live="polite" aria-atomic="true">
+        <div><span>WIN CHANCE</span><strong id="dice-chance-value">50%</strong></div>
+        <div><span>GROSS PAYOUT</span><strong id="dice-payout-value">95 coins</strong></div>
+        <div><span>NET WIN</span><strong id="dice-net-value">+45 coins</strong></div>
+      </section>
+      <div class="dice-control-heading"><span>COIN STAKE</span><b>1 FTA = 100 COINS</b></div>
+      <div class="dice-stakes" role="group" aria-label="Coin stake">
+        <button type="button" data-dice-stake="50" class="active" aria-pressed="true">50</button>
+        <button type="button" data-dice-stake="100" aria-pressed="false">100</button>
+        <button type="button" data-dice-stake="200" aria-pressed="false">200</button>
+        <button type="button" data-dice-stake="500" aria-pressed="false">500</button>
+      </div>
+      <button id="dice-roll-button" type="button" class="dice-roll-button"><span>ROLL · 50 COINS</span><i aria-hidden="true"></i></button>
+      <p id="dice-status" class="dice-status hidden" role="alert"></p>
+    </div>
+    <section class="dice-history">
+      <div class="dice-section-heading"><h3>Roll history</h3><span>RECENT</span></div>
+      <p id="dice-history-empty" class="dice-history-empty">No rolls yet</p>
+      <div id="dice-history-list" class="dice-history-list"></div>
+    </section>
+  </div>
+
+  <!-- ═══ FITA MINES 3D ═══ -->
+  <div id="view-mines" class="view arcade-view mines-view">
+    <div class="arcade-header">
+      <button type="button" class="arcade-back-button" onclick="App.nav('hub')" aria-label="Back to Hub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>
+      <div><span>FITIA GAMES</span><h2>FITA Mines 3D</h2></div>
+      <button id="mines-open-info" type="button" class="arcade-info-button" aria-label="View Mines probabilities">ODDS</button>
+    </div>
+    <section class="arcade-hero">
+      <img src="assets/mines.svg" width="66" height="66" alt="" draggable="false">
+      <div><span>COIN BALANCE</span><strong id="mines-coin-balance">0</strong></div>
+      <div class="arcade-hero-stat"><span>ROUNDS</span><strong id="mines-total-rounds">0</strong></div>
+    </section>
+    <section id="mines-locked" class="arcade-locked hidden"><strong>FARM activation required</strong><button id="mines-open-farm" type="button" class="farm-small-button">OPEN FARM</button></section>
+    <div id="mines-game" class="arcade-game">
+      <section class="arcade-stage mines-stage" aria-label="FITA Mines 3D game">
+        <div id="mines-3d-container" class="arcade-3d-container" role="img" aria-label="Animated three-dimensional Mines board"><img src="assets/mines.svg" width="140" height="140" alt="" draggable="false"></div>
+      </section>
+      <div id="mines-grid" class="mines-grid" role="group" aria-label="Mines tiles">
+        <button type="button" data-mines-index="0" aria-label="Tile 1" aria-pressed="false"><img class="hidden" alt="" draggable="false"></button>
+        <button type="button" data-mines-index="1" aria-label="Tile 2" aria-pressed="false"><img class="hidden" alt="" draggable="false"></button>
+        <button type="button" data-mines-index="2" aria-label="Tile 3" aria-pressed="false"><img class="hidden" alt="" draggable="false"></button>
+        <button type="button" data-mines-index="3" aria-label="Tile 4" aria-pressed="false"><img class="hidden" alt="" draggable="false"></button>
+        <button type="button" data-mines-index="4" aria-label="Tile 5" aria-pressed="false"><img class="hidden" alt="" draggable="false"></button>
+        <button type="button" data-mines-index="5" aria-label="Tile 6" aria-pressed="false"><img class="hidden" alt="" draggable="false"></button>
+        <button type="button" data-mines-index="6" aria-label="Tile 7" aria-pressed="false"><img class="hidden" alt="" draggable="false"></button>
+        <button type="button" data-mines-index="7" aria-label="Tile 8" aria-pressed="false"><img class="hidden" alt="" draggable="false"></button>
+        <button type="button" data-mines-index="8" aria-label="Tile 9" aria-pressed="false"><img class="hidden" alt="" draggable="false"></button>
+        <button type="button" data-mines-index="9" aria-label="Tile 10" aria-pressed="false"><img class="hidden" alt="" draggable="false"></button>
+        <button type="button" data-mines-index="10" aria-label="Tile 11" aria-pressed="false"><img class="hidden" alt="" draggable="false"></button>
+        <button type="button" data-mines-index="11" aria-label="Tile 12" aria-pressed="false"><img class="hidden" alt="" draggable="false"></button>
+        <button type="button" data-mines-index="12" aria-label="Tile 13" aria-pressed="false"><img class="hidden" alt="" draggable="false"></button>
+        <button type="button" data-mines-index="13" aria-label="Tile 14" aria-pressed="false"><img class="hidden" alt="" draggable="false"></button>
+        <button type="button" data-mines-index="14" aria-label="Tile 15" aria-pressed="false"><img class="hidden" alt="" draggable="false"></button>
+        <button type="button" data-mines-index="15" aria-label="Tile 16" aria-pressed="false"><img class="hidden" alt="" draggable="false"></button>
+        <button type="button" data-mines-index="16" aria-label="Tile 17" aria-pressed="false"><img class="hidden" alt="" draggable="false"></button>
+        <button type="button" data-mines-index="17" aria-label="Tile 18" aria-pressed="false"><img class="hidden" alt="" draggable="false"></button>
+        <button type="button" data-mines-index="18" aria-label="Tile 19" aria-pressed="false"><img class="hidden" alt="" draggable="false"></button>
+        <button type="button" data-mines-index="19" aria-label="Tile 20" aria-pressed="false"><img class="hidden" alt="" draggable="false"></button>
+        <button type="button" data-mines-index="20" aria-label="Tile 21" aria-pressed="false"><img class="hidden" alt="" draggable="false"></button>
+        <button type="button" data-mines-index="21" aria-label="Tile 22" aria-pressed="false"><img class="hidden" alt="" draggable="false"></button>
+        <button type="button" data-mines-index="22" aria-label="Tile 23" aria-pressed="false"><img class="hidden" alt="" draggable="false"></button>
+        <button type="button" data-mines-index="23" aria-label="Tile 24" aria-pressed="false"><img class="hidden" alt="" draggable="false"></button>
+        <button type="button" data-mines-index="24" aria-label="Tile 25" aria-pressed="false"><img class="hidden" alt="" draggable="false"></button>
+      </div>
+      <section class="arcade-quote" aria-label="Current Mines payout" aria-live="polite" aria-atomic="true">
+        <div><span>SAFE TILES</span><strong id="mines-safe-count">0</strong></div>
+        <div><span>CASHOUT</span><strong id="mines-current-payout">0 coins</strong></div>
+        <div><span>NEXT SAFE</span><strong id="mines-next-chance">88%</strong></div>
+      </section>
+      <div class="arcade-control-heading"><span>MINES</span><b>25 TILES</b></div>
+      <div class="arcade-choices mines-counts" role="group" aria-label="Mine count">
+        <button type="button" data-mines-count="1" aria-pressed="false">1</button><button type="button" data-mines-count="3" class="active" aria-pressed="true">3</button><button type="button" data-mines-count="5" aria-pressed="false">5</button><button type="button" data-mines-count="10" aria-pressed="false">10</button>
+      </div>
+      <div class="arcade-control-heading"><span>COIN STAKE</span><b>1 FTA = 100 COINS</b></div>
+      <div class="arcade-stakes" role="group" aria-label="Coin stake">
+        <button type="button" data-mines-stake="50" class="active" aria-pressed="true">50</button><button type="button" data-mines-stake="100" aria-pressed="false">100</button><button type="button" data-mines-stake="200" aria-pressed="false">200</button><button type="button" data-mines-stake="500" aria-pressed="false">500</button>
+      </div>
+      <button id="mines-start-button" type="button" class="arcade-action-button"><span>START · 50 COINS</span><i aria-hidden="true"></i></button>
+      <button id="mines-cashout-button" type="button" class="arcade-action-button cashout hidden"><span>CASH OUT · 0 COINS</span><i aria-hidden="true"></i></button>
+      <button id="mines-resume-button" type="button" class="arcade-action-button hidden">RESUME ROUND</button>
+      <p id="mines-status" class="arcade-status hidden" role="alert"></p>
+    </div>
+    <section id="mines-result" class="arcade-result hidden" aria-live="polite"><span>LAST RESULT</span><strong id="mines-result-title"></strong><small id="mines-result-detail"></small></section>
+    <section class="arcade-history"><div class="arcade-section-heading"><h3>Mines history</h3><span>RECENT</span></div><p id="mines-history-empty" class="arcade-history-empty">No rounds yet</p><div id="mines-history-list" class="arcade-history-list"></div></section>
+  </div>
+
+  <!-- ═══ FITA CRASH ═══ -->
+  <div id="view-crash" class="view arcade-view crash-view">
+    <div class="arcade-header">
+      <button type="button" class="arcade-back-button" onclick="App.nav('hub')" aria-label="Back to Hub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>
+      <div><span>FITIA GAMES</span><h2>FITA Crash</h2></div>
+      <button id="crash-open-info" type="button" class="arcade-info-button" aria-label="View Crash probabilities">ODDS</button>
+    </div>
+    <section class="arcade-hero">
+      <img src="assets/crash.svg" width="66" height="66" alt="" draggable="false"><div><span>COIN BALANCE</span><strong id="crash-coin-balance">0</strong></div><div class="arcade-hero-stat"><span>FLIGHTS</span><strong id="crash-total-rounds">0</strong></div>
+    </section>
+    <section id="crash-locked" class="arcade-locked hidden"><strong>FARM activation required</strong><button id="crash-open-farm" type="button" class="farm-small-button">OPEN FARM</button></section>
+    <div id="crash-game" class="arcade-game">
+      <section id="crash-stage" class="arcade-stage crash-stage" data-state="ready" aria-label="FITA Crash game">
+        <div id="crash-3d-container" class="arcade-3d-container" role="img" aria-label="Animated FITIA rocket following a rising multiplier curve"><img src="assets/crash.svg" width="145" height="145" alt="" draggable="false"></div>
+        <div class="crash-target-badge"><span>AUTO CASHOUT</span><strong id="crash-stage-target-value">2.00×</strong></div>
+        <div class="crash-multiplier-wrap"><strong id="crash-multiplier" class="crash-multiplier" aria-hidden="true">1.00×</strong><span id="crash-multiplier-caption">READY FOR LAUNCH</span></div>
+        <div class="crash-stage-payout"><span>POTENTIAL PAYOUT</span><strong id="crash-stage-payout-value">100 coins</strong></div>
+        <section id="crash-result" class="arcade-result crash-result hidden" aria-live="polite"><span>LAST RESULT</span><strong id="crash-result-title"></strong><small id="crash-result-detail"></small></section>
+      </section>
+      <section id="crash-history-strip" class="crash-history-strip hidden" aria-label="Recent crash multipliers"><span>RECENT</span><div id="crash-recent-multipliers" role="list"></div></section>
+      <section class="crash-betting-panel" aria-label="Crash betting controls">
+        <div class="arcade-control-heading"><span>COIN STAKE</span><b>1 FTA = 100 COINS</b></div>
+        <div class="arcade-stakes crash-stakes" role="group" aria-label="Coin stake"><button type="button" data-crash-stake="50" class="active" aria-pressed="true">50</button><button type="button" data-crash-stake="100" aria-pressed="false">100</button><button type="button" data-crash-stake="200" aria-pressed="false">200</button><button type="button" data-crash-stake="500" aria-pressed="false">500</button></div>
+        <div class="arcade-control-heading"><span>AUTO CASHOUT</span><b>1.50× – 10.00×</b></div>
+        <div class="arcade-choices crash-targets" role="group" aria-label="Auto cashout target">
+          <button type="button" data-crash-target="150" aria-pressed="false">1.50×</button><button type="button" data-crash-target="200" class="active" aria-pressed="true">2.00×</button><button type="button" data-crash-target="300" aria-pressed="false">3.00×</button><button type="button" data-crash-target="500" aria-pressed="false">5.00×</button><button type="button" data-crash-target="1000" aria-pressed="false">10.00×</button>
+        </div>
+        <section class="arcade-quote" aria-label="Potential Crash payout" aria-live="polite" aria-atomic="true"><div><span>WIN CHANCE</span><strong id="crash-chance-value">47.5%</strong></div><div><span>GROSS PAYOUT</span><strong id="crash-payout-value">100 coins</strong></div><div><span>NET WIN</span><strong id="crash-net-value">+50 coins</strong></div></section>
+        <button id="crash-play-button" type="button" class="arcade-action-button crash-launch-button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 3.5c2.6-2 5-1.9 5-1.9s.1 2.4-1.9 5c-1.2 1.5-2.8 2.8-4.7 3.8l-3.3-3.3c1-1.9 2.3-3.5 3.8-4.7l1.1 1.1ZM9.5 10.6l3.9 3.9M7.7 12.2l-3.2.6.6-3.2 2.1-.4.5 3ZM11.8 16.3l-.6 3.2 3.2-.6.4-2.1-3-.5ZM6.2 15.1c-1.6.6-2.7 2.1-3.2 4.7 2.6-.5 4.1-1.6 4.7-3.2"/></svg><span>LAUNCH · 50 COINS</span><i aria-hidden="true"></i></button>
+        <p id="crash-status" class="arcade-status hidden" role="alert"></p>
+      </section>
+    </div>
+    <section class="arcade-history"><div class="arcade-section-heading"><h3>Flight history</h3><span>RECENT</span></div><p id="crash-history-empty" class="arcade-history-empty">No flights yet</p><div id="crash-history-list" class="arcade-history-list"></div></section>
+  </div>
+
+  <!-- ═══ COIN FLIP 3D ═══ -->
+  <div id="view-coin-flip" class="view arcade-view coin-flip-view">
+    <div class="arcade-header">
+      <button type="button" class="arcade-back-button" onclick="App.nav('hub')" aria-label="Back to Hub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>
+      <div><span>FITIA GAMES</span><h2>Coin Flip 3D</h2></div>
+      <button id="coin-flip-open-info" type="button" class="arcade-info-button" aria-label="View Coin Flip probabilities">ODDS</button>
+    </div>
+    <section class="arcade-hero">
+      <img src="assets/coin-flip.svg" width="66" height="66" alt="" draggable="false"><div><span>COIN BALANCE</span><strong id="flip-coin-balance">0</strong></div><div class="arcade-hero-stat"><span>FLIPS</span><strong id="flip-total-rounds">0</strong></div>
+    </section>
+    <section id="flip-locked" class="arcade-locked hidden"><strong>FARM activation required</strong><button id="coin-flip-open-farm" type="button" class="farm-small-button">OPEN FARM</button></section>
+    <div id="flip-game" class="arcade-game">
+      <section class="arcade-stage coin-flip-stage" aria-label="Coin Flip 3D game"><div id="coin-flip-3d-container" class="arcade-3d-container" role="img" aria-label="Animated three-dimensional coin"><img src="assets/coin-flip.svg" width="150" height="150" alt="" draggable="false"></div></section>
+      <section id="flip-result" class="arcade-result hidden" aria-live="polite"><span>LAST RESULT</span><strong id="flip-result-title"></strong><small id="flip-result-detail"></small></section>
+      <div class="arcade-control-heading"><span>YOUR SIDE</span><b>1.90× PAYOUT</b></div>
+      <div class="arcade-choices flip-choices" role="group" aria-label="Coin side"><button type="button" data-flip-choice="heads" class="active" aria-pressed="true"><strong>H</strong><span>HEADS</span></button><button type="button" data-flip-choice="tails" aria-pressed="false"><strong>T</strong><span>TAILS</span></button></div>
+      <section class="arcade-quote" aria-label="Potential Coin Flip payout" aria-live="polite" aria-atomic="true"><div><span>WIN CHANCE</span><strong id="flip-chance-value">50%</strong></div><div><span>GROSS PAYOUT</span><strong id="flip-payout-value">95 coins</strong></div><div><span>NET WIN</span><strong id="flip-net-value">+45 coins</strong></div></section>
+      <div class="arcade-control-heading"><span>COIN STAKE</span><b>1 FTA = 100 COINS</b></div>
+      <div class="arcade-stakes" role="group" aria-label="Coin stake"><button type="button" data-flip-stake="50" class="active" aria-pressed="true">50</button><button type="button" data-flip-stake="100" aria-pressed="false">100</button><button type="button" data-flip-stake="200" aria-pressed="false">200</button><button type="button" data-flip-stake="500" aria-pressed="false">500</button></div>
+      <button id="flip-play-button" type="button" class="arcade-action-button"><span>FLIP · 50 COINS</span><i aria-hidden="true"></i></button><p id="coin-flip-status" class="arcade-status hidden" role="alert"></p>
+    </div>
+    <section class="arcade-history"><div class="arcade-section-heading"><h3>Flip history</h3><span>RECENT</span></div><p id="flip-history-empty" class="arcade-history-empty">No flips yet</p><div id="flip-history-list" class="arcade-history-list"></div></section>
+  </div>
+</main>
+
+<!-- ═══ NAVIGATION BASSE — 5 ENTRÉES ═══ -->
+<nav class="bottom-nav" aria-label="Main navigation">
+  <button class="nav-item active" data-nav="dashboard" onclick="App.nav('dashboard', this)"><svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg><span data-i18n="home">Home</span></button>
+  <button class="nav-item" data-nav="shop" onclick="App.nav('shop', this)"><svg viewBox="0 0 24 24"><path d="m14 3-9 12h6l-1 6 9-12h-6l1-6Z"/></svg><span data-i18n="shop">Shop</span></button>
+  <button class="nav-item" data-nav="store" onclick="App.nav('store', this)"><svg viewBox="0 0 24 24"><path d="M18 6h-2c0-2.21-1.79-4-4-4S8 3.79 8 6H6c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6-2c1.1 0 2 .9 2 2h-4c0-1.1.9-2 2-2zm6 16H6V8h2v2c0 .55.45 1 1 1s1-.45 1-1V8h4v2c0 .55.45 1 1 1s1-.45 1-1V8h2v12z"/></svg><span>STORE</span></button>
+  <button class="nav-item" data-nav="my-rigs" onclick="App.nav('my-rigs', this)"><svg viewBox="0 0 24 24"><path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/></svg><span data-i18n="assets">Wallet</span></button>
+  <button class="nav-item" data-nav="hub" onclick="App.nav('hub', this)"><svg viewBox="0 0 24 24"><circle cx="5" cy="5" r="2"/><circle cx="12" cy="5" r="2"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="12" cy="19" r="2"/><circle cx="19" cy="19" r="2"/></svg><span>Hub</span></button>
+</nav>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     MODALES
+     ═══════════════════════════════════════════════════════════════════ -->
+
+<!-- Lucky Wheel : règles et probabilités -->
+<div id="modal-wheel-info" class="modal" role="dialog" aria-modal="true" aria-labelledby="wheel-info-title">
+  <div class="modal-content wheel-info-modal">
+    <div class="modal-header"><h3 id="wheel-info-title">Rules & probabilities</h3><button id="wheel-close-info" type="button" class="modal-close" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button></div>
+    <div class="wheel-probability-base"><span>REWARD BASE</span><strong id="wheel-probability-base">50 coins</strong></div>
+    <div class="wheel-probability-header"><span>REWARD</span><span>VALUE</span><span>CHANCE</span></div>
+    <div id="wheel-probability-list" class="wheel-probability-list"></div>
+    <div class="wheel-rule-chips"><span>FREE / 24H</span></div>
+  </div>
+</div>
+
+<!-- FITA Dice 3D : règles et probabilités -->
+<div id="modal-dice-info" class="modal" role="dialog" aria-modal="true" aria-labelledby="dice-info-title">
+  <div class="modal-content dice-info-modal">
+    <div class="modal-header"><h3 id="dice-info-title">Rules & probabilities</h3><button id="dice-close-info" type="button" class="modal-close" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button></div>
+    <div class="dice-probability-base"><span>STAKE BASE</span><strong id="dice-probability-base">50 coins</strong></div>
+    <div class="dice-probability-header"><span>WINNING ROLL</span><span>GROSS PAYOUT</span><span>CHANCE</span></div>
+    <div id="dice-probability-list" class="dice-probability-list"></div>
+    <div class="dice-rule-chips"><span>RTP ≤ 95%</span></div>
+  </div>
+</div>
+
+<!-- FITA Mines 3D : règles et probabilités -->
+<div id="modal-mines-info" class="modal" role="dialog" aria-modal="true" aria-labelledby="mines-info-title">
+  <div class="modal-content arcade-info-modal">
+    <div class="modal-header"><h3 id="mines-info-title">Rules & probabilities</h3><button id="mines-close-info" type="button" class="modal-close" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button></div>
+    <div class="arcade-probability-base"><span>STAKE BASE</span><strong id="mines-probability-base">50 coins</strong></div>
+    <div class="arcade-probability-header"><span>MINES</span><span>1 SAFE PAYOUT</span><span>FIRST SAFE</span></div>
+    <div id="mines-probability-list" class="arcade-probability-list"></div>
+    <div class="arcade-rule-chips"><span>RTP ≤ 95%</span><span>25 TILES</span><span>MAX 1,000,000 COINS</span></div>
+  </div>
+</div>
+
+<!-- FITA Crash : règles et probabilités -->
+<div id="modal-crash-info" class="modal" role="dialog" aria-modal="true" aria-labelledby="crash-info-title">
+  <div class="modal-content arcade-info-modal">
+    <div class="modal-header"><h3 id="crash-info-title">Rules & probabilities</h3><button id="crash-close-info" type="button" class="modal-close" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button></div>
+    <div class="arcade-probability-base"><span>STAKE BASE</span><strong id="crash-probability-base">50 coins</strong></div>
+    <div class="arcade-probability-header"><span>AUTO CASHOUT</span><span>GROSS PAYOUT</span><span>CHANCE</span></div>
+    <div id="crash-probability-list" class="arcade-probability-list"></div>
+    <div class="arcade-rule-chips"><span>RTP ≤ 95%</span><span>AUTO CASHOUT</span></div>
+  </div>
+</div>
+
+<!-- Coin Flip 3D : règles et probabilités -->
+<div id="modal-coin-flip-info" class="modal" role="dialog" aria-modal="true" aria-labelledby="flip-info-title">
+  <div class="modal-content arcade-info-modal">
+    <div class="modal-header"><h3 id="flip-info-title">Rules & probabilities</h3><button id="coin-flip-close-info" type="button" class="modal-close" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button></div>
+    <div class="arcade-probability-base"><span>STAKE BASE</span><strong id="flip-probability-base">50 coins</strong></div>
+    <div class="arcade-probability-header"><span>SIDE</span><span>GROSS PAYOUT</span><span>CHANCE</span></div>
+    <div id="flip-probability-list" class="arcade-probability-list"></div>
+    <div class="arcade-rule-chips"><span>RTP 95%</span><span>1.90× PAYOUT</span></div>
+  </div>
+</div>
+
+<!-- Envoyer -->
+<div id="modal-send" class="modal">
+  <div class="modal-content">
+    <div class="modal-header"><h3 data-i18n="send">Envoyer</h3><button class="modal-close" onclick="App.closeModals()">✕</button></div>
+    <div id="send-token-select-wrap" class="send-token-select-wrap">
+      <input type="hidden" id="send-token-select" value="POL">
+      <button type="button" id="send-token-trigger" class="send-token-trigger" aria-haspopup="listbox" aria-expanded="false" aria-controls="send-token-menu" onclick="App.toggleSendTokenMenu()">
+        <span class="send-token-current">
+          <img id="send-token-current-logo" src="assets/pol.svg" alt="POL logo" width="40" height="40" draggable="false">
+          <span class="send-token-current-copy"><strong id="send-token-current-symbol">POL</strong><small id="send-token-current-name">Polygon</small></span>
+        </span>
+        <svg class="send-token-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div id="send-token-menu" class="send-token-menu" role="listbox" aria-label="Token">
+        <button type="button" class="send-token-option selected" data-send-token="POL" role="option" aria-selected="true" onclick="App.selectSendToken('POL')">
+          <img src="assets/pol.svg" alt="" width="36" height="36" draggable="false" aria-hidden="true"><span><strong>POL</strong><small>Polygon Mainnet</small></span><span class="send-token-option-check" aria-hidden="true">✓</span>
+        </button>
+        <button type="button" class="send-token-option" data-send-token="USDT" role="option" aria-selected="false" onclick="App.selectSendToken('USDT')">
+          <img src="assets/usdt.svg" alt="" width="36" height="36" draggable="false" aria-hidden="true"><span><strong>USDT</strong><small>Tether USD · ERC-20</small></span><span class="send-token-option-check" aria-hidden="true">✓</span>
+        </button>
+        <button type="button" class="send-token-option" data-send-token="FTA" role="option" aria-selected="false" onclick="App.selectSendToken('FTA')">
+          <img src="assets/fta.png" alt="" width="36" height="36" draggable="false" aria-hidden="true"><span><strong>FTA</strong><small>FITIA · ERC-20</small></span><span class="send-token-option-check" aria-hidden="true">✓</span>
+        </button>
+      </div>
+    </div>
+    <div class="send-bal-row">
+      <span class="small-text"><span data-i18n="availWalletBal">Disponible portefeuille :</span> <strong id="send-bal">0</strong></span>
+      <button type="button" class="btn-chip sm" onclick="App.fillMaxSend()">MAX</button>
+    </div>
+    <div class="send-addr-wrap">
+      <input type="text" id="send-to-address" class="game-input" placeholder="Adresse destinataire (0x...)" data-i18n-placeholder="recipientAddr" maxlength="42" autocomplete="off" spellcheck="false" style="text-align:left; padding-right: 74px;">
+      <button type="button" class="btn-paste-inline" onclick="App.pasteRecipientAddr()">📋 <span data-i18n="paste">Paste</span></button>
+    </div>
+    <input type="text" inputmode="decimal" id="send-amount" class="game-input" placeholder="Montant" maxlength="40" autocomplete="off" data-i18n-placeholder="amount">
+    <div class="send-fee-hint">
+      <span data-i18n="networkFee">Frais réseau estimés</span>
+      <span>~0.002 POL (Polygon)</span>
+    </div>
+    <button type="button" id="send-confirm-button" class="btn-primary send-confirm-button" style="margin-top:10px;" onclick="App.executeSend()" data-i18n="confirmSend">CONFIRMER L'ENVOI</button>
+  </div>
+</div>
+
+<!-- Recevoir (avec QR Code intégré hors-ligne) -->
+<div id="modal-receive" class="modal">
+  <div class="modal-content" style="text-align: center;">
+    <div class="modal-header"><h3 data-i18n="receive">Recevoir</h3><button class="modal-close" onclick="App.closeModals()">✕</button></div>
+    <div class="network-pill-badge">🟣 Polygon Mainnet (ERC-20 / POL)</div>
+    <div id="receive-qr-box" class="receive-qr-box"></div>
+    <div class="receive-addr-box" onclick="App.copyReceiveAddress()">
+      <span id="receive-addr-display">0x...</span>
+      <span class="copy-icon">📋</span>
+    </div>
+    <div class="receive-actions-row">
+      <button class="btn-primary" onclick="App.copyReceiveAddress()">📋 <span data-i18n="copyAddrBtn">Copier l'adresse</span></button>
+      <button class="btn-secondary-outline" style="margin-top:0;" onclick="App.shareReceiveAddress()">📤 <span data-i18n="shareBtn">Partager</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- FITIA STORE — Panier -->
+<div id="modal-store-cart" class="modal">
+  <div class="modal-content modal-scrollable store-modal-content">
+    <div class="modal-header"><h3 data-store-i18n="cartTitle">Your cart</h3><button class="modal-close" onclick="App.closeModals()" aria-label="Close">✕</button></div>
+    <p id="store-cart-seller" class="store-modal-subtitle"></p>
+    <div id="store-cart-items" class="store-cart-items"></div>
+    <p id="store-cart-empty" class="store-empty-copy" data-store-i18n="cartEmpty">Your cart is empty.</p>
+    <div id="store-cart-totals" class="store-totals hidden">
+      <div><span data-store-i18n="subtotal">Subtotal</span><strong id="store-cart-subtotal">0</strong></div>
+      <div><span data-store-i18n="delivery">Delivery</span><strong id="store-cart-shipping">0</strong></div>
+      <div class="store-grand-total"><span data-store-i18n="total">Total</span><strong id="store-cart-total">0</strong></div>
+    </div>
+    <button type="button" id="store-cart-checkout" class="btn-primary" onclick="App.storeCenter.openCheckout()" data-store-i18n="checkout">DELIVERY & PAYMENT</button>
+    <button type="button" id="store-cart-clear" class="btn-secondary-outline" onclick="App.storeCenter.clearCart(true)" data-store-i18n="clearCart">Clear cart</button>
+  </div>
+</div>
+
+<!-- FITIA STORE — Livraison et paiement -->
+<div id="modal-store-checkout" class="modal">
+  <div class="modal-content modal-scrollable store-modal-content">
+    <div class="modal-header"><h3 data-store-i18n="checkoutTitle">Delivery & payment</h3><button class="modal-close" onclick="App.closeModals()" aria-label="Close">✕</button></div>
+    <div id="store-checkout-summary" class="store-checkout-summary"></div>
+    <form id="store-checkout-form" autocomplete="off">
+      <div class="store-form-grid">
+        <label><span data-store-i18n="fullName">Full name</span><input id="store-shipping-name" class="game-input" maxlength="80" autocomplete="off" required></label>
+        <label><span data-store-i18n="phone">Phone</span><input id="store-shipping-phone" class="game-input" type="tel" maxlength="32" autocomplete="off" required></label>
+        <label><span data-store-i18n="country">Country</span><input id="store-shipping-country" class="game-input" maxlength="60" autocomplete="off" required></label>
+        <label><span data-store-i18n="city">City</span><input id="store-shipping-city" class="game-input" maxlength="80" autocomplete="off" required></label>
+      </div>
+      <label class="store-form-field"><span data-store-i18n="postalAddress">Full postal address</span><textarea id="store-shipping-address" class="game-input" rows="3" maxlength="240" autocomplete="off" required></textarea></label>
+      <label class="store-form-field"><span data-store-i18n="deliveryNotes">Delivery note (optional)</span><textarea id="store-shipping-notes" class="game-input" rows="2" maxlength="300" autocomplete="off"></textarea></label>
+      <label class="store-consent"><input id="store-checkout-consent" type="checkbox" required><span data-store-i18n="consent">I understand that the crypto payment is irreversible and that my delivery details will be sent privately to the seller for this order.</span></label>
+      <p id="store-checkout-error" class="store-form-error" role="alert"></p>
+      <button type="submit" id="store-pay-button" class="btn-primary" data-store-i18n="payNow">PAY WITH PIN</button>
+    </form>
+  </div>
+</div>
+
+<!-- FITIA STORE — Confirmation et suivi automatique -->
+<div id="modal-store-receipt" class="modal">
+  <div class="modal-content modal-scrollable store-modal-content">
+    <div class="modal-header"><h3 data-store-i18n="receiptTitle">Order status</h3><button class="modal-close" onclick="App.closeModals()" aria-label="Close">✕</button></div>
+    <div id="store-receipt-status" class="store-receipt-status"></div>
+    <div id="store-receipt-content" class="store-receipt-content"></div>
+    <button type="button" id="store-receipt-track" class="btn-primary" onclick="App.storeCenter.openOrders()" data-store-i18n="trackOrder">TRACK ORDER</button>
+    <button type="button" class="btn-secondary-outline" onclick="App.closeModals()" data-store-i18n="done">Done</button>
+  </div>
+</div>
+
+<!-- FITIA STORE — Suivi privé des commandes -->
+<div id="modal-store-orders" class="modal">
+  <div class="modal-content modal-scrollable store-modal-content">
+    <div class="modal-header"><h3 data-store-i18n="ordersTitle">My orders</h3><button class="modal-close" onclick="App.closeModals()" aria-label="Close">✕</button></div>
+    <button type="button" id="store-orders-refresh" class="btn-secondary-outline" onclick="App.storeCenter.refreshOrders()" data-store-i18n="refresh">Refresh</button>
+    <div id="store-orders-list" class="store-orders-list"></div>
+    <p id="store-orders-empty" class="store-empty-copy" data-store-i18n="ordersEmpty">No store orders yet.</p>
+  </div>
+</div>
+
+<!-- FITIA FARM — actions et conversions -->
+<div id="modal-farm-dialog" class="modal">
+  <div class="modal-content modal-scrollable farm-modal-content">
+    <div class="modal-header"><div><h3 id="farm-dialog-title">FITIA FARM</h3><p id="farm-dialog-subtitle" class="farm-modal-subtitle"></p></div><button class="modal-close" onclick="App.farmCenter.closeDialog()" aria-label="Close">✕</button></div>
+    <div id="farm-dialog-content" class="farm-dialog-content"></div>
+    <p id="farm-dialog-error" class="farm-dialog-error" role="alert"></p>
+    <div id="farm-dialog-actions" class="farm-dialog-actions"></div>
+  </div>
+</div>
+
+<!-- Centre de Sécurité & Paramètres du Portefeuille -->
+<div id="modal-security" class="modal">
+  <div class="modal-content modal-scrollable">
+    <div class="modal-header">
+      <h3 data-i18n="securityCenterTitle">Portefeuille & Sécurité</h3>
+      <button class="modal-close" onclick="App.closeModals()">✕</button>
+    </div>
+
+    <div class="sec-wallet-summary">
+      <div class="sec-wallet-top hidden">
+        <span class="status-pill active">Polygon (137)</span>
+        <span id="sec-rpc-latency" class="rpc-latency-badge">RPC OK</span>
+      </div>
+      <div class="sec-addr-full" id="sec-full-address">0x...</div>
+      <div class="sec-wallet-btns">
+        <button class="btn-chip" onclick="App.copyReceiveAddress()"><span data-i18n="copyAddrShort">Copier</span></button>
+        <button class="btn-chip hidden" onclick="App.openPolygonScan()">PolygonScan</button>
+        <button class="btn-chip hidden" onclick="App.lockWallet()"><span data-i18n="lockNow">Verrouiller</span></button>
+      </div>
+    </div>
+
+    <div class="card referral-card">
+      <div class="ref-header-row">
+        <div class="ref-brand">
+          <img src="assets/fta.png" class="ref-brand-logo" width="38" height="38" alt="">
+          <div>
+            <h3 data-i18n="refTitle">Programme de parrainage</h3>
+          </div>
+        </div>
+        <span class="ref-network-badge">POLYGON</span>
+      </div>
+
+      <div class="ref-code-panel">
+        <span class="ref-code-label" data-i18n="yourRefCode">Votre code de parrainage</span>
+        <strong id="my-ref-id-label" class="ref-code-value">—</strong>
+      </div>
+      <div class="ref-link-panel">
+        <span class="ref-code-label" data-i18n="yourRefLink">Votre lien de parrainage</span>
+        <strong id="my-ref-link-label" class="ref-link-value">—</strong>
+      </div>
+      <div class="ref-actions">
+        <button type="button" class="ref-action-btn ref-action-secondary" onclick="App.copyMyReferralLink()">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg>
+          <span data-i18n="copyRefLink">Copier le lien</span>
+        </button>
+        <button type="button" class="ref-action-btn ref-action-primary" onclick="App.shareMyReferral()">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="2.5"></circle><circle cx="6" cy="12" r="2.5"></circle><circle cx="18" cy="19" r="2.5"></circle><path d="m8.2 10.8 7.6-4.5M8.2 13.2l7.6 4.5"></path></svg>
+          <span data-i18n="shareRef">Partager</span>
+        </button>
+      </div>
+      <button type="button" class="ref-code-copy" onclick="App.copyMyReferralCode()" data-i18n="copyRefCode">Copier le code</button>
+
+      <div class="ref-bind-block">
+        <strong class="ref-bind-title" data-i18n="refBindTitle">Vous avez un code ?</strong>
+        <p id="current-referrer-status" class="small-text referral-status"></p>
+        <div id="ref-form-wrap" class="ref-input-group">
+          <label class="ref-input-label" for="ref-address-input" data-i18n="refInputLabel">Code ou adresse du parrain</label>
+          <div class="ref-input-row">
+            <input type="text" id="ref-address-input" class="game-input" placeholder="FITIA-001042, #1042 ou 0x..." data-i18n-placeholder="enterRefAddr" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done">
+            <button type="button" class="ref-bind-button" onclick="App.bindReferrer()" data-i18n="bindRef">ASSOCIER</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec-section-title" data-i18n="backupAndKeys">Sauvegarde & Clés Secrètes</div>
+    <div class="sec-menu-list">
+      <button id="btn-export-seed" class="sec-menu-item" onclick="App.exportRecoveryPhrase()">
+        <div class="sec-menu-left">
+          <div>
+            <strong data-i18n="viewSeedPhrase">Recovery Phrase (12 words)</strong>
+            <small class="hidden" data-i18n="reqPinHint">Protégé par code PIN</small>
+          </div>
+        </div>
+        <span>›</span>
+      </button>
+      <button class="sec-menu-item" onclick="App.exportPrivateKey()">
+        <div class="sec-menu-left">
+          <div>
+            <strong data-i18n="exportPrivKey">Exporter la clé privée</strong>
+            <small class="hidden" data-i18n="reqPinHint">Protégé par code PIN</small>
+          </div>
+        </div>
+        <span>›</span>
+      </button>
+    </div>
+
+    <div class="sec-section-title" data-i18n="accessProtection">Protection d'accès</div>
+    <div class="sec-menu-list">
+      <button class="sec-menu-item" onclick="App.startChangePin()">
+        <div class="sec-menu-left">
+          <div>
+            <strong data-i18n="changePinTitle">Modifier le code PIN à 6 chiffres</strong>
+            <small class="hidden" data-i18n="changePinSub">Rechiffrer le coffre-fort AES-256</small>
+          </div>
+        </div>
+        <span>›</span>
+      </button>
+
+      <div id="sec-bio-row" class="sec-menu-item no-tap hidden">
+        <div class="sec-menu-left">
+          <div>
+            <strong data-i18n="biometricUnlock">Déverrouillage biométrique</strong>
+            <small data-i18n="biometricSub">Empreinte digitale / Reconnaissance faciale</small>
+          </div>
+        </div>
+        <label class="switch-toggle">
+          <input type="checkbox" id="toggle-biometric" onchange="App.onToggleBiometric(this)">
+          <span class="switch-slider"></span>
+        </label>
+      </div>
+
+      <div class="sec-menu-item no-tap">
+        <div class="sec-menu-left">
+          <div>
+            <strong data-i18n="autoLockLabel">Verrouillage automatique</strong>
+            <small class="hidden" data-i18n="autoLockSub">Après inactivité en arrière-plan</small>
+          </div>
+        </div>
+        <select id="select-autolock" class="sec-inline-select" onchange="App.onChangeAutoLock(this.value)">
+          <option value="1">1 min</option>
+          <option value="5">5 min</option>
+          <option value="15">15 min</option>
+          <option value="0" data-i18n="never">Jamais</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="sec-section-title hidden" data-i18n="networkNodeTitle">Réseau Polygon RPC</div>
+    <div class="sec-rpc-box hidden">
+      <select id="select-rpc-node" class="game-input" style="margin-bottom:8px; font-size:0.82rem;" onchange="App.onSelectRpcNode(this.value)"></select>
+      <div class="sec-custom-rpc-row">
+        <input type="url" id="custom-rpc-input" class="game-input" placeholder="RPC personnalisé (https://...)" style="margin-bottom:0; font-size:0.8rem; text-align:left;">
+        <button class="btn-chip accent" onclick="App.saveCustomRpc()">OK</button>
+      </div>
+    </div>
+
+    <a id="sec-apk-download-btn" href="FITIA-PRO-TEST.apk" download="FITIA-PRO-TEST.apk" class="apk-download-banner" style="margin-top:14px;">
+      <div>
+        <strong data-i18n="downloadApkTitle">Télécharger l'APK Android</strong>
+        <small data-i18n="downloadApkSub">Installer FITIA PRO sur téléphone Android</small>
+      </div>
+    </a>
+
+    <button class="btn-danger-outline" style="margin-top: 16px;" onclick="App.promptResetWallet()" data-i18n="switchOrResetWallet">
+      Changer ou réinitialiser ce portefeuille
+    </button>
+  </div>
+</div>
+
+<!-- Mise à jour Android obligatoire -->
+<div id="modal-update" class="modal" role="dialog" aria-modal="true" aria-labelledby="update-required-title">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="update-required-title" data-i18n="updateRequiredTitle">Mise à jour requise</h3>
+    </div>
+    <p id="update-required-message" class="small-text update-required-message" data-i18n="updateRequiredMessage">Des améliorations de sécurité et de nouvelles fonctionnalités sont disponibles. Installez la dernière version pour continuer à utiliser FITIA PRO.</p>
+    <p class="small-text" data-i18n="updateInstallHint">Android vous demandera de confirmer l’installation.</p>
+    <button class="btn-primary" onclick="App.startUpdateDownload()" data-i18n="updateDownloadInstall">Télécharger et installer</button>
+  </div>
+</div>
+
+<!-- Modale d'Affichage de Secret (12 mots / Clé Privée) -->
+<div id="modal-secret-reveal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="reveal-modal-title">Secret</h3>
+      <button class="modal-close" onclick="App.closeRevealModal()">✕</button>
+    </div>
+    <div class="security-warning-box" style="margin-bottom: 12px;">
+      <span>🚨</span>
+      <p data-i18n="neverShareSecretWarn">Ne donnez JAMAIS ces informations à personne, même au support. Quiconque les voit peut voler tous vos fonds.</p>
+    </div>
+    <div id="reveal-seed-grid" class="seed-grid hidden"></div>
+    <div id="reveal-pk-box" class="receive-addr-box hidden" style="margin-bottom: 12px;">
+      <span id="reveal-pk-text">0x...</span>
+    </div>
+    <button class="btn-primary" onclick="App.copyRevealedSecret()">📋 <span data-i18n="copySecretBtn">Copier dans le presse-papiers</span></button>
+  </div>
+</div>
+
+<!-- Modale de Confirmation par Code PIN (pour Envoi / Export Clés / Changement PIN) -->
+<div id="modal-pin-confirm" class="modal modal-high-z">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="pin-confirm-title" data-i18n="confirmWithPin">Confirmation Sécurité</h3>
+      <button class="modal-close" onclick="App.cancelPinVerification()">✕</button>
+    </div>
+    <p id="pin-confirm-subtitle" class="small-text" style="text-align:center; margin-bottom:10px;" data-i18n="enterPinToContinue">Enter your 6-digit PIN pour autoriser cette opération.</p>
+    <div id="confirm-pin-dots" class="pin-dots">
+      <span></span><span></span><span></span><span></span><span></span><span></span>
+    </div>
+    <p id="confirm-pin-error" class="pin-error-msg"></p>
+    <div class="pin-keypad compact">
+      <button type="button" class="pin-key" onclick="App.onConfirmPinDigit('1')">1</button>
+      <button type="button" class="pin-key" onclick="App.onConfirmPinDigit('2')">2</button>
+      <button type="button" class="pin-key" onclick="App.onConfirmPinDigit('3')">3</button>
+      <button type="button" class="pin-key" onclick="App.onConfirmPinDigit('4')">4</button>
+      <button type="button" class="pin-key" onclick="App.onConfirmPinDigit('5')">5</button>
+      <button type="button" class="pin-key" onclick="App.onConfirmPinDigit('6')">6</button>
+      <button type="button" class="pin-key" onclick="App.onConfirmPinDigit('7')">7</button>
+      <button type="button" class="pin-key" onclick="App.onConfirmPinDigit('8')">8</button>
+      <button type="button" class="pin-key" onclick="App.onConfirmPinDigit('9')">9</button>
+      <button type="button" class="pin-key pin-key-empty" disabled></button>
+      <button type="button" class="pin-key" onclick="App.onConfirmPinDigit('0')">0</button>
+      <button type="button" class="pin-key pin-key-action" onclick="App.onConfirmPinBackspace()" aria-label="Delete" data-i18n-aria-label="deleteDigit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 3H7c-.69 0-1.23.35-1.59.88L0 12l5.41 8.11c.36.53.9.89 1.59.89h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-3 12.59L17.59 17 14 13.41 10.41 17 9 15.59 12.59 12 9 8.41 10.41 7 14 10.59 17.59 7 19 8.41 15.41 12 19 15.59z"/></svg></button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ HISTORIQUE & NOTIFICATIONS ═══ -->
+<div id="modal-activity" class="modal" role="dialog" aria-modal="true" aria-labelledby="activity-modal-title">
+  <div class="modal-content modal-scrollable activity-modal-content">
+    <div class="modal-header">
+      <h3 id="activity-modal-title" data-i18n="activityCenterTitle">Activity center</h3>
+      <button class="modal-close" onclick="App.closeModals()" aria-label="Close" data-i18n-aria-label="activityClose">✕</button>
+    </div>
+
+    <div class="activity-tabs" role="tablist" aria-label="History and notifications" data-i18n-aria-label="activityHistoryTabLabel">
+      <button id="activity-tab-history" class="activity-tab active" role="tab" aria-selected="true" aria-controls="activity-history-panel" onclick="App.activity.setTab('history')" data-i18n="activityHistoryTab">History</button>
+      <button id="activity-tab-notifications" class="activity-tab" role="tab" aria-selected="false" aria-controls="activity-notifications-panel" onclick="App.activity.setTab('notifications')">
+        <span data-i18n="activityNotificationsTab">Notifications</span> <span id="activity-tab-badge" class="activity-tab-badge hidden">0</span>
+      </button>
+    </div>
+
+    <section id="activity-history-panel" role="tabpanel" aria-labelledby="activity-tab-history">
+      <div class="activity-toolbar">
+        <span id="activity-history-count" class="activity-count">0 operation</span>
+        <select id="activity-status-filter" class="activity-filter" onchange="App.activity.setFilter(this.value)" aria-label="Filter transactions" data-i18n-aria-label="activityFilterLabel">
+          <option value="all" data-i18n="activityAll">All</option>
+          <option value="pending" data-i18n="activityStatusPending">Pending</option>
+          <option value="success" data-i18n="activityConfirmed">Confirmed</option>
+          <option value="failed" data-i18n="activityFailedPlural">Failed</option>
+        </select>
+      </div>
+      <div id="activity-history-list" class="activity-list" aria-live="polite"></div>
+    </section>
+
+    <section id="activity-notifications-panel" class="hidden" role="tabpanel" aria-labelledby="activity-tab-notifications">
+      <div class="activity-toolbar">
+        <span class="activity-count" data-i18n="activityWalletAlerts">Wallet alerts</span>
+        <button id="activity-mark-all-read" class="activity-mark-read" onclick="App.activity.markAllNotificationsRead()" disabled data-i18n="activityMarkAllRead">Mark all as read</button>
+      </div>
+      <div id="activity-notifications-list" class="notification-list" aria-live="polite"></div>
+    </section>
+
+  </div>
+</div>
+
+<!-- ═══ CHAT ASSISTANT ═══ -->
+<button id="chat-fab-btn" class="chat-fab hidden" onclick="App.toggleChat()">
+  <img src="assets/icon-192.png" class="chat-fab-logo" alt="FITIA">
+</button>
+<div id="chat-panel" class="chat-panel">
+  <div class="chat-header">
+    <div class="chat-header-brand">
+      <img src="assets/icon-192.png" class="chat-header-logo" alt="FITIA">
+      <span>Fitia Assistant</span>
+    </div>
+    <button class="chat-close" onclick="App.toggleChat()" aria-label="Close assistant" data-i18n-aria-label="chatClose">✕</button>
+  </div>
+  <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
+  <div class="chat-input-area">
+    <input type="text" id="chat-input" class="chat-input" placeholder="Ask your question…" data-i18n-placeholder="chatPlaceholder" maxlength="500" autocomplete="off" onkeydown="if(event.key==='Enter')App.sendChatMessage()">
+    <button class="chat-send-btn" onclick="App.sendChatMessage()" aria-label="Send question" data-i18n-aria-label="chatSend">➤</button>
+  </div>
+</div>
+
+<!-- ═══ LOADER ═══ -->
+<div id="loader" class="loader hidden">
+  <div class="fta-loader-wrap">
+    <div class="fta-loader-ring"></div>
+    <img src="assets/icon-192.png" class="fta-loader-logo" alt="FITIA">
+  </div>
+</div>
+
+<script src="activity.js"></script>
+<script src="announcements.js"></script>
+<script src="promotion-effects.js"></script>
+<script src="promotions.js"></script>
+<script src="game-visibility-config.js"></script>
+<script src="game-visibility.js"></script>
+<script src="store-catalog.js"></script>
+<script src="store-order-protocol.js"></script>
+<script src="store.js"></script>
+  <script src="farm-config.js"></script>
+  <script src="farm-protocol.js"></script>
+  <script src="farm-3d.js"></script>
+  <script src="farm.js"></script>
+  <script src="wheel-config.js"></script>
+  <script src="wheel.js"></script>
+  <script src="dice-config.js"></script>
+  <script src="dice-3d.js"></script>
+  <script src="dice.js"></script>
+  <script src="arcade-config.js"></script>
+  <script src="arcade-3d.js"></script>
+  <script src="arcade.js"></script>
+  <script src="assistant.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

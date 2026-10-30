@@ -1,0 +1,62 @@
+name: Publish signed APK release asset
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing GitHub release tag (for example v3.3.9)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish-apk:
+    runs-on: ubuntu-latest
+    if: github.repository == 'web3service/fitia-mining-pro-test'
+    steps:
+      - name: Check out the signed APK and update manifest
+        uses: actions/checkout@v4
+
+      - name: Verify APK against update-current.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ $(cat android-src/release-certificate-sha256.txt) =~ ^[0-9a-f]{64}$ ]] || { echo 'Test certificate not configured'; exit 1; }
+          pin="$(cat android-src/release-certificate-sha256.txt)"
+          [[ "$pin" != "fa3494fb50ee2240f477b7cb21bb0d8606cedceac36a263e1e877f34319fdf72" ]] || { echo 'Official certificate forbidden'; exit 1; }
+          build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          test -x "$build_tools/apksigner" && test -x "$build_tools/aapt"
+          "$build_tools/aapt" dump badging FITIA-PRO-TEST.apk | grep -F "package: name='com.fitia.miningpro.test'"
+          actual_cert="$("$build_tools/apksigner" verify --print-certs FITIA-PRO-TEST.apk | sed -n 's/.*certificate SHA-256 digest: //p' | head -n 1 | tr '[:upper:]' '[:lower:]')"
+          [[ "$actual_cert" == "$pin" ]] || { echo 'Wrong signing certificate'; exit 1; }
+          python3 -c 'import json; u=json.load(open("update-current.json")); assert u["enabled"] and u["apkUrl"] == "https://github.com/web3service/fitia-mining-pro-test/releases/download/v%s/FITIA-PRO-TEST.apk" % u["versionName"]'
+          expected="$(python3 -c 'import json; print(json.load(open("update-current.json"))["sha256"])')"
+          actual="$(sha256sum FITIA-PRO-TEST.apk | awk '{print $1}')"
+          if [[ ! "$actual" =~ ^[0-9a-f]{64}$ ]] || [[ "$actual" != "$expected" ]]; then
+            echo "APK SHA-256 does not match update-current.json" >&2
+            exit 1
+          fi
+          echo "Verified APK SHA-256: $actual"
+
+      - name: Attach APK and publish the verified release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          expected_tag="v$(python3 -c 'import json; print(json.load(open("update-current.json"))["versionName"])')"
+          tag="${REQUESTED_TAG:-$expected_tag}"
+          if [[ "$tag" != "$expected_tag" ]]; then
+            echo "Release tag $tag does not match update-current.json ($expected_tag)" >&2
+            exit 1
+          fi
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --title "FITIA PRO TEST ${tag#v}" --notes "Security and feature improvements."
+          fi
+          gh release upload "$tag" FITIA-PRO-TEST.apk --clobber
+          if [[ "$(gh release view "$tag" --json isDraft --jq .isDraft)" == "true" ]]; then
+            gh release edit "$tag" --draft=false
+          fi
