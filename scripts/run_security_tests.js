@@ -2699,11 +2699,15 @@ function httpRequest(port, method, reqPath) {
       const legacy36Manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'update-stable.json'), 'utf8'));
       const appSource = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
       const apkSha256 = crypto.createHash('sha256').update(fs.readFileSync(apkPath)).digest('hex');
-      assert.strictEqual(updateManifest.enabled, true, 'Le canal de mise à jour dans l’application est actif');
       assert.strictEqual(updateManifest.versionCode, 352);
       assert.strictEqual(updateManifest.versionName, '3.5.2');
-      assert.ok(updateManifest.apkUrl.includes('/v3.5.2/'));
-      assert.strictEqual(updateManifest.sha256, apkSha256, 'Le manifeste courant épingle le SHA-256 exact de l’APK');
+      if (updateManifest.enabled) {
+        assert.strictEqual(updateManifest.apkUrl, 'https://github.com/web3service/fitia-mining-pro-test/releases/download/v3.5.2/FITIA-PRO-TEST.apk');
+        assert.strictEqual(updateManifest.sha256, apkSha256, 'Le manifeste courant épingle le SHA-256 exact de l’APK');
+      } else {
+        assert.strictEqual(updateManifest.apkUrl, '', 'Pas de téléchargement avant publication');
+        assert.strictEqual(updateManifest.sha256, '', 'Pas d’empreinte publiée avant validation');
+      }
       assert.ok(appSource.includes('main/update-current.json'), 'Le wallet 3.5.2 utilise le nouveau canal de mise à jour');
       assert.ok(!appSource.includes('main/update-stable.json'), 'Le nouveau wallet ne consulte plus le canal 3.3.6');
       assert.strictEqual(legacy35Manifest.versionCode, 311, 'Les versions 3.3.5 ne reçoivent pas un APK au certificat incompatible');

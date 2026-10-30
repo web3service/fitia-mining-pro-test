@@ -2,7 +2,7 @@
 
 > Cette copie provient de `web3service/fitia-mining-pro` au commit `30d35fe307e1c1f97abcd948cf3b51c64273f4af`. Ne pas importer de portefeuille réel. Le code hérité lit encore Polygon Mainnet ; les transactions de l’application et la vérification des paiements des services par défaut sont désactivées. Ce n’est pas encore un environnement blockchain isolé.
 >
-> Aucun APK de test n’est fourni ; les mises à jour sont désactivées. Le projet Vercel de test est déployé et sa connexion à la base de test a été vérifiée. Voir [TEST-SETUP.md](TEST-SETUP.md). Les informations ci-dessous sont la documentation héritée et peuvent ne pas s’appliquer au test.
+> Un APK de test signé est disponible localement ; il n’est pas publié et sa co-installation n’a pas été vérifiée sur un appareil. Les mises à jour sont désactivées. Le projet Vercel de test est déployé et sa connexion à la base de test a été vérifiée. Voir [TEST-SETUP.md](TEST-SETUP.md). Les informations ci-dessous sont la documentation héritée et peuvent ne pas s’appliquer au test.
 
 ---
 
