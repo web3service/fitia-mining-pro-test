@@ -314,3 +314,6 @@ h1 span, .security-copy h2 span { color: var(--gold); }
   html { scroll-behavior: auto; }
   *, *::before, *::after { transition: none !important; }
 }
+
+.test-warning { position: relative; z-index: 10; background: #7f1d1d; color: #fff; padding: 16px; text-align: center; font-weight: 700; }
+button.button:disabled { opacity: .6; cursor: not-allowed; }
